@@ -17,7 +17,6 @@ This file gives different molecule ID for each chain. Cations are half of the ch
 rest half of the chains. 
 
 For example, for 100 chains - 50 cations, and 50 anions. 
-
 """
 
 from math import *
