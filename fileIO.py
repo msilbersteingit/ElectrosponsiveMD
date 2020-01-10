@@ -20,8 +20,8 @@ def findInSubdirectory(filename, subdirectory=''):
     if subdirectory:
         path = subdirectory
     else:
-        path=r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\simulation_files\coarsegrain'
-        #path = os.getcwd()
+        path=r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\simulation_files_synchronized_stampede2\coarsegrain\\'
+        #path = os.getcwd() 
     for root, dirs, names in os.walk(path):
         if filename in names:
             print(os.path.join(root, filename))

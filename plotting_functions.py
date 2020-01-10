@@ -5,6 +5,8 @@ from matplotlib.ticker import FormatStrFormatter
 import matplotlib.patches as mpatches
 from matplotlib.lines import Line2D
 from scipy import signal
+import seaborn as sns
+import matplotlib as mpl
 
 from analib import fileIO
 from analib import extract
@@ -75,6 +77,14 @@ def set_y_props(ax,label):
     ax.set_yticklabels(ax.get_yticks(),{'family':'serif','size':14})
     ax.yaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.set_ylabel(label,fontProperties)
+    return ax
+
+def set_x_props(ax,label):
+    """"Set properties for y-axis with the given name"""
+    fontProperties = {'family':'serif','size':20}
+    ax.set_xticklabels(ax.get_xticks(),{'family':'serif','size':14})
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax.set_xlabel(label,fontProperties)
     return ax
 
 def plot_cutoff_pairs(distances,*args,save=False,dotsperinch=300):
@@ -223,7 +233,7 @@ def plot_charged_compars_2(cut_off,*args,save=False,dotsperinch=300):
         fname = fileIO.default_path + '_comparison_charged_' + str(cut_off) + '.png'
         fig1.savefig(fname,dpi=dotsperinch)
 
-def understand_variation(*args,smoothed=False,save=False):
+def understand_variation(*args,smoothed=False,save=False,msd=False):
     """
     Plot data for repeats of same simulation to understand intra-model
     variation.
@@ -233,8 +243,6 @@ def understand_variation(*args,smoothed=False,save=False):
     smoothed (=False) : Apply a Savgol filter to smooth curves
     """
     fig1=plt.figure(figsize=[8,8],dpi=100)
-    fig2=plt.figure(figsize=[8,8],dpi=100)
-    fig3=plt.figure(figsize=[8,8],dpi=100)
     strain=np.arange(0,1.718,0.001)
     till = len(strain)
     for index,arg in enumerate(args):
@@ -256,13 +264,14 @@ def understand_variation(*args,smoothed=False,save=False):
         else:
             plt.plot(strain[:till],df1[:till,deformation_along+1]*1000,
                      linewidth=2,label=arg)
-        plt.figure(2)
-        ax2=plt.gca()
-        ax2.plot(strain,df2[:,4],label='positive')
-        ax2.plot(strain,df2[:,8],label='negative')
-        ax2.plot(strain,df2[:,12],label='ions')
-        ax2.plot(strain,df2[:,16],label='neutral',linestyle=':',
-         linewidth=2)
+        if msd:
+            plt.figure(2)
+            ax2=plt.gca()
+            ax2.plot(strain,df2[:,4],label='positive')
+            ax2.plot(strain,df2[:,8],label='negative')
+            ax2.plot(strain,df2[:,12],label='ions')
+            ax2.plot(strain,df2[:,16],label='neutral',linestyle=':',
+            linewidth=2)
         #ax2.plot(strain,df2[:,20],label=arg,linewidth=2)
         #ax3.plot(df2[:,0],df2[:,19],label='positive')
         #ax3.plot(df2[:,0],df2[:,22],label='negative')
@@ -280,16 +289,17 @@ def understand_variation(*args,smoothed=False,save=False):
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
     plt.legend()
     plt.show()
-    ax2=set_strain_props(ax2)
-    plt.ylabel('MSD ($\AA ^2$)',fontsize=20,fontfamily='serif')
-    plt.legend()
-    plt.close()
-    plt.figure(3)
-    plt.xlabel('Strain',fontsize=20,fontfamily='Serif')
-    plt.ylabel('Non Gaussian Parameter',fontsize=20,fontfamily='Serif')
-    plt.legend()
-    plt.close()
-    path=r'c:/Users/Raiter/OneDrive - Cornell University/Thesis/Results/11052019/atg/'
+    if msd:
+        ax2=set_strain_props(ax2)
+        plt.ylabel('MSD ($\AA ^2$)',fontsize=20,fontfamily='serif')
+        plt.legend()
+        plt.close()
+        plt.figure(3)
+        plt.xlabel('Strain',fontsize=20,fontfamily='Serif')
+        plt.ylabel('Non Gaussian Parameter',fontsize=20,fontfamily='Serif')
+        plt.legend()
+        plt.close()
+    path=r'c:/Users/Raiter/OneDrive - Cornell University/Thesis/Results/images_from_jupyter_notebook/'
     #arg_name = str(args[0])[:-4]
     full_path = path+ str(args[0])[:-4]
     if save:
@@ -339,3 +349,36 @@ def plot_multiple_numpy(*args,smoothed=False):
         plt.savefig(full_path+'_smoothed.png',dpi=300)
     else:
         plt.savefig(full_path+'.png',dpi=300)
+
+def structure_factor_plotting(k,sk,simname,save,style):
+    if style=='matplotlib':
+        mpl.style.use('default')
+    elif style == 'sns':
+        sns.set()
+    fig = plt.figure(figsize=(8,6))
+    ax = plt.gca()
+    ax.plot(k,sk,linewidth=2) #Plot rdf and set chart properties
+    set_y_props(ax,'$s(k)$')
+    set_x_props(ax,'$k$')
+    figname=simname+'_sk.png'
+    title='Structure Factor'
+    ax.set_title(title,fontsize=20,fontfamily='Serif')
+    if save:
+        plt.savefig(figname,dpi=300)
+
+def radial_distribution_function_plotting(g,r,simname,save,style):
+    """Plotting the radial distribution function"""
+    if style=='matplotlib':
+        mpl.style.use('default')
+    elif style == 'sns':
+        sns.set()
+    fig = plt.figure(figsize=(8,6))
+    ax = plt.gca()
+    ax.plot(r,g,linewidth=2) #Plot rdf and set chart properties
+    set_y_props(ax,'$g(r)$')
+    set_x_props(ax,'$r$')
+    figname=simname+'_rdf.png'
+    title='Radial Distribution Function'
+    ax.set_title(title,fontsize=20,fontfamily='Serif')
+    if save:
+        plt.savefig(figname,dpi=300)
