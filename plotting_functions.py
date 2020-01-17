@@ -10,6 +10,7 @@ import matplotlib as mpl
 
 from analib import fileIO
 from analib import extract
+from analib import integrate
 
 def find_cumulative_pairs(distances,cut_off):
     """Return the number of pairs below the specified cut-off at each timestep
@@ -63,9 +64,8 @@ def find_tracked_pairs(distances,cut_off):
 
 def set_strain_props(ax):
     """Set properties for strain (x-axis) for the given axis object"""
-    strain=np.arange(0,2.0,0.25)
     fontProperties = {'family':'serif','size':20}
-    ax.set_xticklabels(strain,{'family':'serif','size':14})
+    ax.set_xticklabels(ax.get_yticks(),{'family':'serif','size':14})
     ax.set_xlabel('Strain',fontProperties)
     ax.set_xlim(0,1.71)
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
@@ -282,13 +282,13 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
     plt.figure(1)
     plt.xlabel('Strain',fontsize=20,fontfamily='serif')
     plt.ylabel('Stress (MPa)',fontsize=20,fontfamily='serif')
-    strain_labels=np.arange(0,1.75,0.25)
     ax = plt.gca()
     ax = set_strain_props(ax)
     fontProperties = {'family':'serif','size':16}
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
     plt.legend()
-    plt.show()
+    plt.tight_layout()
+    #plt.show()
     if msd:
         ax2=set_strain_props(ax2)
         plt.ylabel('MSD ($\AA ^2$)',fontsize=20,fontfamily='serif')
@@ -382,3 +382,31 @@ def radial_distribution_function_plotting(g,r,simname,save,style):
     ax.set_title(title,fontsize=20,fontfamily='Serif')
     if save:
         plt.savefig(figname,dpi=300)
+    
+def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplotlib'):
+    """
+    Plot all the variables extracted integrate.standard_analysis
+    Args:
+    simname (string): Name of the simulation (end name till density (uk)).
+    Do not add simulation number (eg: uk_1)
+    nfiles (int): Number of simulations.
+    save (bool): Whether to save the plots in a directory.
+    style (string): style of the plots e.g.: 'seaborn','fivethirtyeight',etc.
+    """
+
+    aggregate_data_pd = integrate.standard_analysis(simname, nfiles)
+    fig=plt.figure(figsize=(18,35))
+    time=np.arange((start/10000) +0.0001,(len(aggregate_data_pd)/10000)+0.0001,0.0001)
+    for index, column in enumerate(aggregate_data_pd):
+        if index!=0:
+            ax = fig.add_subplot(5,2,index)
+            ax.plot(time,aggregate_data_pd[column].iloc[start:])
+            ax=set_x_props(ax,'Time (ns)')
+            ax=set_y_props(ax, str(column))
+    curr_fname = simname + '_time_vs.png'
+    if save:
+        plt.savefig(curr_fname,dpi=100)
+
+        
+
+    
