@@ -2,6 +2,7 @@ from analib import extract
 from analib import compute
 from analib import plotting_functions
 import pandas as pd
+import hickle as hkl
 
 def rdf(coordinates, box_l, simname, coords_loc=[3,6], nhis = 200,
     save=False,style='matplotlib'):
@@ -25,8 +26,6 @@ def standard_analysis(simname, nfiles):
     simname (string): Name of the simulation (end name till density (uk)).
     Do not add simulation number (eg: uk_1)
     nfiles (int): Number of simulations.
-    save (bool): Whether to save the plots in a directory.
-    style (string): style of the plots e.g.: 'seaborn','fivethirtyeight',etc.
 
     Returns:
     aggregate_data_pd: nicely organized one single pandas dataframe containing data from ALL
@@ -45,5 +44,44 @@ def standard_analysis(simname, nfiles):
     aggregate_data_pd = pd.concat(aggregate_data_list)
     return aggregate_data_pd
 
+def chain_orientation_parameter_combined(simname, nfiles, nc, dp):
+    """
+    Compute chain orientation parameter from multiple unwrapped files 
+    (different parts of the same simulation) and combine them in one
+    array.
+        
+    Args:
+    simname (string): Name of the simulation (type the name of the simulation
+    only till density which is mostly written as 'uk'). Do not add simulation
+    number (e.g. uk_1).
+    nfiles (int): Number of simulation parts for this specific simulation
 
+    Returns:
+    aggregate_cop_array: One array containing the evolution of chain
+    orientation parameter from initial topology file to the last
+    equilibration step.
+    """
+    cop_x = []
+    cop_y = []
+    cop_z = []
+    for sims in range(1, nfiles+1):
+        curr_fname = simname + '_' + str(sims)
+        coord = extract.extract_unwrapped(curr_fname)
+        for key in coord:
+            cop_x.append(compute.chain_orientation_parameter(coord[key],
+                [1,0,0],nc,dp))
+            cop_y.append(compute.chain_orientation_parameter(coord[key],
+                [0,1,0],nc,dp))
+            cop_z.append(compute.chain_orientation_parameter(coord[key],
+                [0,0,1],nc,dp))
+    dumpnamex = simname + '_cop_x'
+    dumpnamey = simname + '_cop_y'
+    dumpnamez = simname + '_cop_z'
+    print(cop_x)
+    print(cop_y)
+    print(cop_z)
 
+    hkl.dump(cop_x, dumpnamex)
+    hkl.dump(cop_y, dumpnamey)
+    hkl.dump(cop_z, dumpnamez)
+    return zip(cop_x, cop_y, cop_z)

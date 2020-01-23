@@ -117,9 +117,10 @@ def extract_log_thermo(simname):
                     pass
         except IndexError:
             pass
+        
     return log_thermo
 
-def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu']):
+def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],first_only=False):
     """Extract coordinates of all atoms from unwrapped trajectory files with 
     format 'id','mol','type','xu','yu','zu'
     Args:
@@ -149,32 +150,61 @@ def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu']):
     index=0
     timestep=0
     coord={}
-    while index<len(unwrap):
-        line=unwrap.iloc[index].str.split()
-        try:
-            if line[0][0]=='ITEM:' and line[0][1]=='ATOMS':
-                length=len(unwrap.iloc[index+1].str.split()[0])
-                df2=unwrap.iloc[index+1:index+natoms+1]
-                df2=df2[0].str.split(' ', length-1,expand=True) 
-                    #Split based on separator - expensive
-                num2str = lambda x : float(x) 
-                    #convert all elements from str to float
-                df2 = df2.applymap(num2str) 
-                    #apply num2str to every element - expensive
-                df2.columns=format_spec
-                    #add corresponding column labels
-                df2=df2.sort_values(by=['id']) 
-                    #sort based on atom id so that future operations 
-                    # are easy.
-                key='timestep_' + str(timestep) 
-                    #save in the corresponding dictionary.
-                coord[key]= df2
-                index=index + natoms
-                timestep+=1
-            else:
+    if first_only:
+        while index<500:
+            line=unwrap.iloc[index].str.split()
+            try:
+                if line[0][0]=='ITEM:' and line[0][1]=='ATOMS':
+                    length=len(unwrap.iloc[index+1].str.split()[0])
+                    df2=unwrap.iloc[index+1:index+natoms+1]
+                    df2=df2[0].str.split(' ', length-1,expand=True) 
+                        #Split based on separator - expensive
+                    num2str = lambda x : float(x) 
+                        #convert all elements from str to float
+                    df2 = df2.applymap(num2str) 
+                        #apply num2str to every element - expensive
+                    df2.columns=format_spec
+                        #add corresponding column labels
+                    df2=df2.sort_values(by=['id']) 
+                        #sort based on atom id so that future operations 
+                        # are easy.
+                    key='timestep_' + str(timestep) 
+                        #save in the corresponding dictionary.
+                    coord[key]= df2
+                    index=index + natoms
+                    timestep+=1
+                else:
+                    index+=1
+            except IndexError:
                 index+=1
-        except IndexError:
-            index+=1
+    else:
+        while index<len(unwrap):
+            line=unwrap.iloc[index].str.split()
+            try:
+                if line[0][0]=='ITEM:' and line[0][1]=='ATOMS':
+                    length=len(unwrap.iloc[index+1].str.split()[0])
+                    df2=unwrap.iloc[index+1:index+natoms+1]
+                    df2=df2[0].str.split(' ', length-1,expand=True) 
+                        #Split based on separator - expensive
+                    num2str = lambda x : float(x) 
+                        #convert all elements from str to float
+                    df2 = df2.applymap(num2str) 
+                        #apply num2str to every element - expensive
+                    df2.columns=format_spec
+                        #add corresponding column labels
+                    df2=df2.sort_values(by=['id']) 
+                        #sort based on atom id so that future operations 
+                        # are easy.
+                    key='timestep_' + str(timestep) 
+                        #save in the corresponding dictionary.
+                    coord[key]= df2
+                    index=index + natoms
+                    timestep+=1
+                else:
+                    index+=1
+            except IndexError:
+                index+=1
+
     return coord
 
 def extract_wrapped(simname,format_spec = ['id','type','xs','ys','zs']):

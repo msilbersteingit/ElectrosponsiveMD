@@ -12,6 +12,8 @@ from analib import fileIO
 from analib import extract
 from analib import integrate
 
+imagesavepath=r'c:/Users/Raiter/OneDrive - Cornell University/Thesis/Results/images_from_jupyter_notebook/'
+
 def find_cumulative_pairs(distances,cut_off):
     """Return the number of pairs below the specified cut-off at each timestep
 
@@ -288,7 +290,6 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
     plt.legend()
     plt.tight_layout()
-    #plt.show()
     if msd:
         ax2=set_strain_props(ax2)
         plt.ylabel('MSD ($\AA ^2$)',fontsize=20,fontfamily='serif')
@@ -299,9 +300,7 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
         plt.ylabel('Non Gaussian Parameter',fontsize=20,fontfamily='Serif')
         plt.legend()
         plt.close()
-    path=r'c:/Users/Raiter/OneDrive - Cornell University/Thesis/Results/images_from_jupyter_notebook/'
-    #arg_name = str(args[0])[:-4]
-    full_path = path+ str(args[0])[:-4]
+    full_path = imagesavepath + str(args[0])[:-4]
     if save:
         if smoothed:
             fname=full_path +'_smoothed.png'
@@ -313,7 +312,11 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
             fig1.savefig(fname,dpi=300)
 
 def plot_multiple_numpy(*args,smoothed=False):
-    """Plot graphs for given """
+    """Plot graphs for given arguments
+    
+    Args:
+    *args (str): numpy arrays for each separate simulation containing the
+    def 1 file information"""
     fig1=plt.figure(figsize=[8,8],dpi=150)        
     plt.figure(1)
     strain=np.arange(0,1.718,0.001)
@@ -341,10 +344,9 @@ def plot_multiple_numpy(*args,smoothed=False):
     fontProperties = {'family':'serif','size':16}
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
     plt.tight_layout()
-    path=r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\11052019\atg\\'
     fname = str(labels)
     fname = fname.replace(',', '').replace('\'','').replace(' ','').strip('[]\'')
-    full_path = path + fname
+    full_path = imagesavepath + fname
     if smoothed:
         plt.savefig(full_path+'_smoothed.png',dpi=300)
     else:
@@ -389,7 +391,7 @@ def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplo
     Args:
     simname (string): Name of the simulation (end name till density (uk)).
     Do not add simulation number (eg: uk_1)
-    nfiles (int): Number of simulations.
+    nfiles (int): Number of simulation parts for this specific simulation
     save (bool): Whether to save the plots in a directory.
     style (string): style of the plots e.g.: 'seaborn','fivethirtyeight',etc.
     """
@@ -405,8 +407,40 @@ def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplo
             ax=set_y_props(ax, str(column))
     curr_fname = simname + '_time_vs.png'
     if save:
-        plt.savefig(curr_fname,dpi=100)
+        full_path = imagesavepath + curr_fname
+        plt.savefig(full_path,dpi=100)
 
-        
+def plot_chain_orientation_parameter(simname, nc, dp, nfiles, 
+    save = False,style='matplotlib'):
+    """
+    Compute chain orientation parameter from each unwrapped file involved in the
+    simulation and concatenate the results into one array. Plot the array
+    against time (ns)
+
+    Args:
+    simname (string): Name of the simulation (type the name of the simulation
+    only till density which is mostly written as 'uk'). Do not add simulation
+    number (e.g. uk_1).
+    nfiles (int): Number of simulation parts for this specific simulation
+    save (bool): Whether to save the plot in a specified directory
+    style (string): style of the plots e.g.: 'seaborn','fivethirtyeight',etc.
+    """
+    aggregate_cop_array = integrate.chain_orientation_parameter_combined(simname,
+    nfiles,nc,dp)
+    cop_x, cop_y, cop_z = zip(*aggregate_cop_array)
+    fig=plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(1,1,1)
+    time = np.arange(0, len(cop_x), 1)
+    ax.plot(time, cop_x, label ='x')
+    ax.plot(time, cop_y, label ='y')
+    ax.plot(time, cop_z, label ='z')
+    ax.legend()
+    ax = set_x_props(ax, 'Time')
+    ax = set_y_props(ax, 'Chain orientation parameter')
+    if save:
+        curr_name = simname + '_cop_vs_time.png'
+        full_path = imagesavepath + curr_name
+        plt.savefig(full_path, dpi=100)
+
 
     

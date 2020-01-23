@@ -194,26 +194,31 @@ def structure_factor(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6]):
     f.close()
     return k,sk
 
-def chain_orientation_parameter(coord,ex,nc,dp,coord_loc=[3,6]):
-    """Compute the chain orientation parameter"""
+def chain_orientation_parameter(curr_coordinates,ex,nc,dp,coord_loc=[3,6]):
+    """Compute the chain orientation parameter for one given timestep.
+    
+    coord (pandas dataframe): Current coordinates for ONE timestep. Do not 
+    provide the coord output from extract.extract_unwrapped function.
+    
+    Returns:
+    cop (float): Chain orientation parameter for the particular timestep 
+    provided."""
     n_applicable_atoms = nc*dp - nc*2
     p2x = [0]*(n_applicable_atoms)
-    for i,key in enumerate(coord):
-        orient = 0
-        outer_index = 0
-        for chain in range(1,nc+1):
-            begin=(chain -1)*dp + 2
-            end = chain*dp
-            curr_coordinates=coord[key]
-            for index in range(begin,end,1):
-                earlier_atom = curr_coordinates[curr_coordinates['id']
-                 == index - 1].values[:,coord_loc[0]:coord_loc[1]]
-                #ref_atom = curr_coordinates[curr_coordinates['id'] == index].values[:,3:6]
-                later_atom = curr_coordinates[curr_coordinates['id'] 
-                == index + 1].values[:,coord_loc[0]:coord_loc[1]]
-                ei = (later_atom - earlier_atom)/(np.linalg.norm(later_atom - earlier_atom))
-                p2x[outer_index] = 1.5*((np.dot(ei,ex))**2) - 0.5
-                outer_index+=1
+    orient = 0
+    outer_index = 0
+    for chain in range(1,nc+1):
+        begin=(chain -1)*dp + 2
+        end = chain*dp
+        for index in range(begin,end,1):
+            earlier_atom = curr_coordinates[curr_coordinates['id']
+                == index - 1].values[:,coord_loc[0]:coord_loc[1]]
+            #ref_atom = curr_coordinates[curr_coordinates['id'] == index].values[:,3:6]
+            later_atom = curr_coordinates[curr_coordinates['id'] 
+            == index + 1].values[:,coord_loc[0]:coord_loc[1]]
+            ei = (later_atom - earlier_atom)/(np.linalg.norm(later_atom - earlier_atom))
+            p2x[outer_index] = 1.5*((np.dot(ei,ex))**2) - 0.5
+            outer_index+=1
     return np.sum(p2x)/n_applicable_atoms
 
 def chain_entanglement_parameter(coord,nc,dp,coord_loc=[3,6]):
