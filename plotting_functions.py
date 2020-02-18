@@ -67,9 +67,9 @@ def find_tracked_pairs(distances,cut_off):
 def set_strain_props(ax):
     """Set properties for strain (x-axis) for the given axis object"""
     fontProperties = {'family':'serif','size':20}
+    ax.set_xlim(0,1.71)
     ax.set_xticklabels(ax.get_yticks(),{'family':'serif','size':14})
     ax.set_xlabel('Strain',fontProperties)
-    ax.set_xlim(0,1.71)
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
     return ax
 
@@ -405,7 +405,7 @@ def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplo
             ax.plot(time,aggregate_data_pd[column].iloc[start:])
             ax=set_x_props(ax,'Time (ns)')
             ax=set_y_props(ax, str(column))
-    curr_fname = simname + '_time_vs.png'
+    curr_fname = simname + '_time_vs_all_parameters_starting_at_timestep_' + str(start)  + '.png'
     if save:
         full_path = imagesavepath + curr_fname
         plt.savefig(full_path,dpi=100)
@@ -443,4 +443,76 @@ def plot_chain_orientation_parameter(simname, nc, dp, nfiles,
         plt.savefig(full_path, dpi=100)
 
 
+def energy_evolution_single(simname, save=False):
+    """
+    Find out energy evolution during the deformation of the given simulation.
+
+    Args:
+    simname (string): Name of the simulation
+    save (bool): Whether to save the plot
+    """
+    def1, def2 = extract.extract_def(simname)
+    fig = plt.figure(figsize=(8,8))
+    ax = fig.add_subplot(1,1,1)
+    epair = (def1.iloc[:,8] - def1.iloc[0,8]).values
+    ebond = (def1.iloc[:,9] - def1.iloc[0,9]).values
+    ecoul = (def1.iloc[:,12] - def1.iloc[0,12]).values
+    evdwl = (def1.iloc[:,13] - def1.iloc[0,13]).values
+    etotal = (def1.iloc[:,14] - def1.iloc[0,14]).values
+    strain=np.arange(0,1.718,0.001)
+    ax.plot(strain, epair, label = 'pairwise')
+    ax.plot(strain, ebond, label = 'bonded')
+    ax.plot(strain, ecoul, label = 'coulombic')
+    ax.plot(strain, evdwl, label = 'Van der Waals')
+    ax.plot(strain, etotal, label = 'total')
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, 'Energy (kcal/mole)')
+    ax.set_xlim(0,1.71)
+    ax.legend(fontsize = 14)
+    plt.tight_layout()
+    if save:
+        curr_name = simname + '_energy_evolution_deformation.png'
+        full_path = imagesavepath + curr_name
+        plt.savefig(full_path)
+
+
+def energy_evolution_comparison(simname, ids, save = False):
+    """
+    Compare energy evolution along different directions for the 
+    given simulation.
+
+    Args:
+    simname (string): Name of the simulation
+    ids: if '2_x', '3_x' then [2,3]
+    save (bool): Whether to save the plot
+    """
+    dirs = ['x','y','z','x','y','z']
+    df1 = {}
+    df2 = {}
+    col_nums = [8,9,12,13,14,17, 7, 15,16]
+    col_labels = ['pairwise','bonded','coulombic','Van der Waals','total','density', 'temp','pe','ke']
+    for index in range(6):
+        fname = simname + '_' + str(ids[int(index/3)]) + '_' + dirs[index]
+        df1[index], df2[index] = extract.extract_def(fname)
+    fig = plt.figure(figsize=(20,18))
+    strain=np.arange(0,1.718,0.001)
+    for index in range(9):
+        ax = fig.add_subplot(3,3,index+1)
+        for inner_index in range(6):
+            #curr_energy = (df1[inner_index].iloc[:,col_nums[index]] - df1[inner_index].iloc[0,col_nums[index]]).values
+            #ax.plot(strain, curr_energy, label = dirs[inner_index])
+            ax.plot(strain, df1[inner_index].iloc[:,col_nums[index]], label = dirs[inner_index])
+            ax.legend(fontsize = 16)
+            ax.set_title(col_labels[index],fontsize=20)
+            ax = set_x_props(ax, 'Strain')
+            ax = set_y_props(ax, 'Energy (kcal/mole)')
+            ax.set_xlim(0,1.71)
+    if save:
+        curr_name = simname + '_energy_evolution_deformation_comparison.png'
+        full_path = imagesavepath + curr_name
+        plt.tight_layout()
+        plt.savefig(full_path)
     
+    
+    
+
