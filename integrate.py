@@ -9,7 +9,7 @@ def rdf(coordinates, box_l, simname, coords_loc=[3,6], nhis = 200,
     """ Radial distribution function"""
     g,r = compute.radial_distribution_function(coordinates, box_l, simname, 
         coords_loc, nhis)
-    plotting_functions.radial_distribution_function_plotting(g,r,simname,save,style)
+    plotting_functions.radial_distribution_function_plotting(g,r,simname,save,style,nhis)
 
 def sk(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6],
     save=False,style='matplotlib'):
@@ -85,3 +85,5 @@ def chain_orientation_parameter_combined(simname, nfiles, nc, dp):
     hkl.dump(cop_y, dumpnamey)
     hkl.dump(cop_z, dumpnamez)
     return zip(cop_x, cop_y, cop_z)
+
+
