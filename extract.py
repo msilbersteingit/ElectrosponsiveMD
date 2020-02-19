@@ -310,3 +310,41 @@ def read_boxsize(simname,last_timestep=173):
     return prop_constant
 
 
+def temp_func(simname,ids):
+    """
+    This function reads the given LAMMPS simulation name (if present somewhere
+    in the current directory or subdirectories) and returns a numpy array 
+    containing the file's output (log, lammpstrj, def1, def2).
+    
+    *def* files are usually created by Raiter during deformations. They are 
+    clutter-free and contain only numbers. This function will NOT work for log
+    files. For log files, please check extract_log_thermo function.
+    
+    Args:
+    simname (str): name of the *def* file
+    syntax (str): the format specification of the requested def file. Default
+     is '18f'
+    
+    Returns:
+    def1 (dataframe): Pandas dataframe containing the output from the *def1*
+                      file.
+    def2 (dataframe): Pandas dataframe containing output from the *def2* file.
+    """
+    fname={}
+    col_index=[1,2,3,1,2,3]
+    dirs = ['x','y','z','x','y','z']
+    for index in range(6):
+        fname[index] = simname + '_' + str(ids[int(index/3)]) + '_' + dirs[index]
+    for index in range(6):
+        dump_wrapped, dump_unwrapped, dump_def1,dump_def2,\
+            dump_def3, log_file=fileIO.retrieve_different_filetypes(fname[index])
+        path=fileIO.findInSubdirectory(dump_def1)
+        column_names=['strain','pxx','pyy','pzz','lx','ly','lz','temp','epair',
+                    'ebond','eangle','edihed','ecoul','evdwl','etotal','pe','ke',
+                    'density']
+        def1=pd.read_csv(path,delim_whitespace=True,
+                        skiprows=1,dtype=np.float64,
+                        names=column_names,
+                        index_col=False) #Read and skip the first line
+        df = def1.iloc[0:8, col_index[index]].round(6)*1000
+        print(df.to_string(index=False))
