@@ -115,12 +115,13 @@ def plot_cutoff_pairs(distances,*args,save=False,dotsperinch=300):
     ax.legend()
     plt.show()
     if save:
+
         fname = fileIO.default_path + 'cutoffs_' + str(args)
         plt.savefig(fname,dotsperinch)
     #return num_of_pairs
 
 def specific_cutoff_pairs(distances,dist_vec,cut_off,
-                          prop_constant,save=False):
+                          prop_constant,pngname,save=False):
     """Plot tracked pairs, hypothetical pairs and cumulative pairs for one
     set. Check ____ for multiple plots.
     Args:
@@ -130,7 +131,8 @@ def specific_cutoff_pairs(distances,dist_vec,cut_off,
         distances between positive and negative beads (vector) as values at
         that timestep as a pandas dataframe. 
     cut_off (float): The designated limit of the distances between pairs.
-    prop_constant (np array): an array  containing the proportionality
+    
+    _constant (np array): an array  containing the proportionality
         constant pertaining to the increase in size of
         the box (along x, y and z) at every timestep.
     
@@ -142,7 +144,7 @@ def specific_cutoff_pairs(distances,dist_vec,cut_off,
     num_of_pairs_hypothetical = find_hypothetical_pairs(dist_vec,distances,
                                                         prop_constant,cut_off)
 
-    strain=np.arange(0,len(distances.keys())/100,0.01)
+    strain=np.linspace(0,1.71,len(distances.keys()))
     fig1=plt.figure(figsize=(8,6),dpi=150)
     ax=plt.gca()
     ax=set_strain_props(ax)
@@ -159,20 +161,20 @@ def specific_cutoff_pairs(distances,dist_vec,cut_off,
     ax.legend()
     plt.show()
     if save:
-        saveloc= fileIO.default_path + 'charge_pair_analysis_cut_off_'\
+        saveloc= fileIO.default_path + pngname + '_charge_pair_analysis_cut_off_'\
             + str(cut_off)
-        plt.savefig(saveloc,dpi=300)
+        fig1.savefig(saveloc,dpi=300)
 
-def plot_charged_compars(cut_off,*args,save=False,dotsperinch=300):
+def plot_charged_compars(*args,cut_off=2,pngname='plot_charged_compars',save=False,dotsperinch=300):
     """ Similar to specific_cutoff_pairs for multiple simulations"""
     distances=args[0]
-    strain=np.arange(0,len(distances.keys())/100,0.01)
+    strain=np.linspace(0,1.71,len(distances.keys()))
     fig1=plt.figure(figsize=(8,6),dpi=150)
     ax=plt.gca()
     index_out=0
     ax=set_strain_props(ax)
     ax=set_y_props(ax,'Number of pairs')
-    c=['C3','g','C0']
+    c=['C3','C0']
     while index_out<len(args):
         distances=args[index_out]
         prop_constant=args[index_out+1]
@@ -182,13 +184,13 @@ def plot_charged_compars(cut_off,*args,save=False,dotsperinch=300):
                                                           prop_constant,
                                                           cut_off)
         num_of_pairs_cumulative = find_cumulative_pairs(distances,cut_off)
-        ax.plot(strain,num_of_pairs_tracked,'-',color=c[index_out])
-        ax.plot(strain,num_of_pairs_cumulative,'--',color = c[index_out])
-        ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out])
+        ax.plot(strain,num_of_pairs_tracked,'-',color=c[index_out//3])
+        ax.plot(strain,num_of_pairs_cumulative,'--',color = c[index_out//3])
+        ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out//3])
         index_out+=3
-    red_patch = mpatches.Patch(color='C3',label = '0.05 V/A')
-    green_patch = mpatches.Patch(color='C0',label = '0.00 V/A')
-    first_legend = plt.legend(handles=[red_patch,green_patch])
+    red_patch = mpatches.Patch(color='C3',label = 'v20')
+    green_patch = mpatches.Patch(color='C0',label = 'v20 (last stage efield')
+    first_legend = plt.legend(handles=[red_patch,green_patch],loc='lower left')
     axl = plt.gca().add_artist(first_legend)
     custom_lines = [Line2D([0], [0], color='k', lw=1),
                 Line2D([0], [0], color='k', linestyle='--',lw=1),
@@ -197,8 +199,8 @@ def plot_charged_compars(cut_off,*args,save=False,dotsperinch=300):
     title = "Cut off = " + str(cut_off)
     ax.set_title(title,fontsize=20,fontfamily='Serif')
     if save:
-        fname = fileIO.default_path + '_comparison_charged.png'
-        plt.savefig(fname,dotsperinch)
+        fname = fileIO.default_path + pngname + '_comparison_charged_cutoff_' + str(cut_off) +'.png'
+        fig1.savefig(fname,dpi=dotsperinch)
 
 def plot_charged_compars_2(cut_off,*args,save=False,dotsperinch=300):
     """ Similar to specific_cutoff_pairs for multiple simulations"""
@@ -235,7 +237,8 @@ def plot_charged_compars_2(cut_off,*args,save=False,dotsperinch=300):
         fname = fileIO.default_path + '_comparison_charged_' + str(cut_off) + '.png'
         fig1.savefig(fname,dpi=dotsperinch)
 
-def understand_variation(*args,smoothed=False,save=False,msd=False):
+def understand_variation(*args,smoothed=False,save=False,msd=False,
+    strain_end=1.718,units='lj'):
     """
     Plot data for repeats of same simulation to understand intra-model
     variation.
@@ -245,8 +248,6 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
     smoothed (=False) : Apply a Savgol filter to smooth curves
     """
     fig1=plt.figure(figsize=[8,8],dpi=100)
-    strain=np.arange(0,1.718,0.001)
-    till = len(strain)
     for index,arg in enumerate(args):
         df1,df2=extract.extract_def(arg)
         df1=df1.values
@@ -255,8 +256,13 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
                                       np.std(df1[:,2]),
                                       np.std(df1[:,3])]))
         plt.figure(1)
+        till = len(df1[:,deformation_along+1])
+        strain=np.linspace(0,strain_end,till)
         if smoothed:
-            y_noise = df1[:till,deformation_along+1]*1000
+            if units=='real':
+                y_noise = df1[:till,deformation_along+1]*1000
+            elif units=='lj':
+                y_noise = df1[:till,deformation_along+1]
             y=signal.savgol_filter(y_noise,
                                    357, # window size used for filtering
                                    1,
@@ -264,7 +270,12 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
             y=np.asarray(y)
             plt.plot(strain[:till],y.T,linewidth=2,label=arg)
         else:
-            plt.plot(strain[:till],df1[:till,deformation_along+1]*1000,
+            #strain=np.arange(0,1.718,0.00)
+            if units=='real':
+                plt.plot(strain[:till],df1[:till,deformation_along+1]*1000,
+                     linewidth=2,label=arg)
+            elif units=='lj':
+                plt.plot(strain[:till],df1[:till,deformation_along+1],
                      linewidth=2,label=arg)
         if msd:
             plt.figure(2)
@@ -283,11 +294,16 @@ def understand_variation(*args,smoothed=False,save=False,msd=False):
         #plt.plot(strain,df2[:,35],label=arg)
     plt.figure(1)
     plt.xlabel('Strain',fontsize=20,fontfamily='serif')
-    plt.ylabel('Stress (MPa)',fontsize=20,fontfamily='serif')
+   
+    if units=='real':
+        plt.ylabel('Stress (MPa)',fontsize=20,fontfamily='serif')
+    elif units=='lj':
+        plt.ylabel('Stress',fontsize=20,fontfamily='serif')
     ax = plt.gca()
     ax = set_strain_props(ax)
     fontProperties = {'family':'serif','size':16}
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
+    plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%g'))
     plt.legend()
     plt.tight_layout()
     if msd:
@@ -376,7 +392,7 @@ def radial_distribution_function_plotting(g,r,simname,save,style):
         sns.set()
     fig = plt.figure(figsize=(8,6))
     ax = plt.gca()
-    ax.plot(r,g,linewidth=2) #Plot rdf and set chart properties
+    ax.plot(r,g,linewidth=1) #Plot rdf and set chart properties
     set_y_props(ax,'$g(r)$')
     set_x_props(ax,'$r$')
     figname=simname+'_rdf.png'
@@ -398,12 +414,15 @@ def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplo
 
     aggregate_data_pd = integrate.standard_analysis(simname, nfiles)
     fig=plt.figure(figsize=(18,35))
-    time=np.arange((start/10000) +0.0001,(len(aggregate_data_pd)/10000)+0.0001,0.0001)
+    #time=np.arange((start/10000) +0.0001,(len(aggregate_data_pd)/10000)+0.0001,0.0001)
+    #time=np.arange((start/10000) +0.0001,(len(aggregate_data_pd)/10000),0.0001)
+    time_length,_=aggregate_data_pd.shape
+    time=np.arange(start,time_length)
     for index, column in enumerate(aggregate_data_pd):
         if index!=0:
             ax = fig.add_subplot(5,2,index)
             ax.plot(time,aggregate_data_pd[column].iloc[start:])
-            ax=set_x_props(ax,'Time (ns)')
+            ax=set_x_props(ax,'Time')
             ax=set_y_props(ax, str(column))
     curr_fname = simname + '_time_vs_all_parameters_starting_at_timestep_' + str(start)  + '.png'
     if save:
@@ -454,19 +473,19 @@ def energy_evolution_single(simname, save=False):
     def1, def2 = extract.extract_def(simname)
     fig = plt.figure(figsize=(8,8))
     ax = fig.add_subplot(1,1,1)
-    epair = (def1.iloc[:,8] - def1.iloc[0,8]).values
+    #epair = (def1.iloc[:,8] - def1.iloc[0,8]).values
     ebond = (def1.iloc[:,9] - def1.iloc[0,9]).values
     ecoul = (def1.iloc[:,12] - def1.iloc[0,12]).values
     evdwl = (def1.iloc[:,13] - def1.iloc[0,13]).values
     etotal = (def1.iloc[:,14] - def1.iloc[0,14]).values
-    strain=np.arange(0,1.718,0.001)
-    ax.plot(strain, epair, label = 'pairwise')
+    strain=np.linspace(0,1.718,len(etotal))
+    #ax.plot(strain, epair, label = 'pairwise')
     ax.plot(strain, ebond, label = 'bonded')
     ax.plot(strain, ecoul, label = 'coulombic')
     ax.plot(strain, evdwl, label = 'Van der Waals')
     ax.plot(strain, etotal, label = 'total')
     ax = set_x_props(ax, 'Strain')
-    ax = set_y_props(ax, 'Energy (kcal/mole)')
+    ax = set_y_props(ax, 'Energy')
     ax.set_xlim(0,1.71)
     ax.legend(fontsize = 14)
     plt.tight_layout()
@@ -505,7 +524,7 @@ def energy_evolution_comparison(simname, ids, save = False):
             ax.legend(fontsize = 16)
             ax.set_title(col_labels[index],fontsize=20)
             ax = set_x_props(ax, 'Strain')
-            ax = set_y_props(ax, 'Energy (kcal/mole)')
+            ax = set_y_props(ax, 'Energy')
             ax.set_xlim(0,1.71)
     if save:
         curr_name = simname + '_energy_evolution_deformation_comparison.png'

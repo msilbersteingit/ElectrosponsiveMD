@@ -1,4 +1,5 @@
 import os
+import string
 
 default_path = r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\python_analysis\\'
 
@@ -20,13 +21,14 @@ def findInSubdirectory(filename, subdirectory=''):
     if subdirectory:
         path = subdirectory
     else:
-        path=r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\simulation_files_synchronized_stampede2\coarsegrain\\'
-        #path = os.getcwd() 
+        path=r'c:\Users\Raiter\OneDrive - Cornell University\Thesis\Results\simulation_files_synchronized_stampede2\\'
+        #path=r'/mnt/c/Users/Raiter/OneDrive - Cornell University/Thesis/Results/python_analysis'
+        #path = os.getcwd()
     for root, dirs, names in os.walk(path):
         if filename in names:
             print(os.path.join(root, filename))
             return os.path.join(root, filename)
-    raise 'File not found'
+    raise NameError('File not found!')
 
 def retrieve_different_filetypes(rootname):
     """Based on a given file rootname, various files associated with that rootname such
@@ -54,3 +56,18 @@ def retrieve_different_filetypes(rootname):
     
     return dump_wrapped, dump_unwrapped, dump_def1, dump_def2, dump_def3, log_file
 
+def break_file(fname,lines_per_file=6151845):
+    fpath=findInSubdirectory(fname)
+    index=0
+    smallfile = None
+    with open(fpath) as bigfile:
+        for lineno, line in enumerate(bigfile):
+            if lineno % lines_per_file == 0:
+                if smallfile:
+                    smallfile.close()
+                small_filename = fname.split('.')[0] + '_part{}.unwrapped.lammpstrj'.format(list(string.ascii_lowercase)[index])
+                smallfile = open(small_filename, "w")
+                index+=1
+            smallfile.write(line)
+        if smallfile:
+            smallfile.close()

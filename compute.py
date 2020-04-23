@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate.quadrature import simps
 
 from analib import fileIO
+from analib import extract
 
 def find_pairs(coord,coords_loc=[3,6]):
     """Reads in a dictionary which contains timesteps as keys and atom 
@@ -43,10 +44,11 @@ def find_pairs(coord,coords_loc=[3,6]):
         dist_vec[key] = np.asarray(current_dist_vec)
         distances[key] = np.asarray(current_distance)
     return distances,dist_vec
+    
 
-def radius_of_gyration(coords,coord_loc = [3,6]):
-    """Compute the radius of gyration for each timestep stored in the distance
-    dictionary
+def radius_of_gyration(coords,mass,coord_loc = [3,6]):
+    """Compute the mean radius of gyration for each timestep stored in the distance
+    dictionary (for each chain)
     
     Args:
     coords (dict):  dictionary with the number of timesteps as keys and 
@@ -63,17 +65,111 @@ def radius_of_gyration(coords,coord_loc = [3,6]):
     rog = [None]*len(coords)
     index=0
     for key in coords:
-        coord_curr=coords[key].iloc[:,coord_loc[0]:coord_loc[1]].values
-        mass=[14]*len(coord_curr)
-        xm = [(m*i, m*j, m*k) for (i, j, k), m in zip(coord_curr, mass)]
-        tmass = sum(mass)
-        rr = sum(mi*i + mj*j + mk*k 
-                for (i, j, k), (mi, mj, mk) in zip(coord_curr, xm))
-        mm = sum((sum(i) / tmass)**2 for i in zip(*xm))
-        rg = np.sqrt(rr / tmass-mm)
-        rog[index] = round(rg, 3)
+        rg=[]
+        for chain in list(coords[key].mol.unique()):
+            coord_curr=coords[key][coords[key]['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values            
+            mass_list = [mass]*len(coord_curr)
+            xm = [(m*i, m*j, m*k) for (i, j, k), m in zip(coord_curr, mass_list)]
+            tmass = sum(mass_list)
+            rr = sum(mi*i + mj*j + mk*k 
+                    for (i, j, k), (mi, mj, mk) in zip(coord_curr, xm))
+            mm = sum((sum(i) / tmass)**2 for i in zip(*xm))
+            rg.append(np.sqrt(rr / tmass-mm))
+        rog[index] = round(np.mean(rg),3)
         index+=1
     return rog
+
+def radius_of_gyration_squared(coords,mass,coord_loc = [3,6]):
+    """Compute the mean radius of gyration for each timestep stored in the distance
+    dictionary (for each chain)
+    
+    Args:
+    coords (dict):  dictionary with the number of timesteps as keys and 
+        coordinates of all atoms at the corresponding timestep as a pandas 
+        dataframe.
+    coord_loc (list): Column start number and column end number for x,y and z
+        coordinates in the coords dictionary. Default is 3 to 6 (for unwrapped)
+    
+    Returns:
+    rog (list): Python list with radius of gyration at each timestep of the
+        simulation (number of timesteps correspond to number of timesteps 
+        present in coords).
+    """
+    rog=[None]*len(coords)
+    index=0
+    for key in coords:
+        rg=[]
+        for chain in list(coords[key].mol.unique()):
+            coord_curr=coords[key][coords[key]['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values            
+            com = np.mean(coord_curr,axis=0)
+            dist_from_com=(np.linalg.norm(coord_curr - com))**2
+            numer=mass*(np.sum(dist_from_com))
+            denom=mass*len(coord_curr)
+            rg.append(numer/denom)            
+        rog[index] = round(np.mean(rg),3)
+        index+=1
+    return rog
+
+def end_to_end_distance(coords,coords_loc=[3,6]):
+    """Compute the average end to end distance of the system.
+    Args:
+    coords (dict):  dictionary with the number of timesteps as keys and 
+        coordinates of all atoms at the corresponding timestep as a pandas 
+        dataframe.
+    coord_loc (list): Column start number and column end number for x,y and z
+        coordinates in the coords dictionary. Default is 3 to 6 (for unwrapped)
+
+    Returns:
+    rend (list): Python list with with mean end to end distance at
+     each timestep.
+    """
+    rend_list = [None]*len(coords)
+    index=0
+    for key in coords:
+        rend=[]
+        for chain in list(coords[key].mol.unique()):
+            coord_curr=coords[key][coords[key]['mol']==chain]
+            id_start = (len(coord_curr))*(chain-1) + 1
+            id_end = (chain)*(len(coord_curr))
+            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values
+            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values
+            curr_dist = np.linalg.norm(r_end-r_start)
+            rend.append(curr_dist)
+        rend_list[index] = round(np.mean(rend),3)
+        index+=1
+    return rend_list
+
+def end_to_end_distance_squared(coords,coords_loc=[3,6]):
+    """Compute the average end to end distance of the system.
+    Args:
+    coords (dict):  dictionary with the number of timesteps as keys and 
+        coordinates of all atoms at the corresponding timestep as a pandas 
+        dataframe.
+    coord_loc (list): Column start number and column end number for x,y and z
+        coordinates in the coords dictionary. Default is 3 to 6 (for unwrapped)
+
+    Returns:
+    rend (list): Python list with with mean end to end distance at
+     each timestep.
+    """
+    rend_list = [None]*len(coords)
+    gauss_list={}
+    index=0
+    for key in coords:
+        rend=[]
+        gauss_list[key]=[]
+        for chain in list(coords[key].mol.unique()):
+            coord_curr=coords[key][coords[key]['mol']==chain]
+            id_start = (len(coord_curr))*(chain-1) + 1
+            id_end = (chain)*(len(coord_curr))
+            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values
+            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values
+            curr_dist = np.linalg.norm(r_end-r_start)
+            rend.append(curr_dist**2)
+            gauss_list[key].append(curr_dist)
+        rend_list[index] = round(np.mean(rend),3)
+        index+=1
+    return rend_list, gauss_list
 
 def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
     nhis=200,save=False):
@@ -90,8 +186,8 @@ def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
         #to numpy array
     npart=np.size(coords,0) #Total number of particles
     """Initialize the histogram"""
-
     delg=box_l/(2*nhis) #Compute size of one bin
+    sideh=box_l/2
     g=[None]*nhis #Initialize g(r)
     for index in range(nhis):
         g[index]=0 #make every element zero. Can be skipped if used 0 instead
@@ -105,6 +201,12 @@ def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
             dx = coords[partA][0] - coords[partB][0]
             dy = coords[partA][1] - coords[partB][1]
             dz = coords[partA][2] - coords[partB][2]
+            if (dx < -sideh):   dx = dx + box_l
+            if (dx > sideh):    dx = dx - box_l
+            if (dy < -sideh):   dy = dy + box_l
+            if (dy > sideh):    dy = dy - box_l
+            if (dz < -sideh):   dz = dz + box_l
+            if (dz > sideh):    dz = dz - box_l
             distAB = [dx,dy,dz]
             r=np.linalg.norm(distAB) #Compute the magnitude of the distance
             if r<(box_l/2): #Check if distance is within cutoff (here half
@@ -116,7 +218,10 @@ def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
     rho=npart/(box_l**3) #Number density
     for index in range(nhis): 
         r=delg*(index+1)
-        volume=4*np.pi*r*r*delg #Area betweeen bin i+1 and i
+        #volume=4*np.pi*r*r*delg #Volume betweeen bin i+1 and i
+        v1 = (4/3)*np.pi*(r**3)
+        v2= (4/3)*np.pi*((r+delg)**3)
+        volume=v2-v1
         g[index]=g[index]/npart #Divide your current count by the total
         # number
             # of particles in the system
@@ -141,7 +246,7 @@ def structure_factor(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6]):
     Variables:
     npart : number of particles in the system
     box_l : box length (assumed that box length along x and y is same)
-    coords : numpy array containing the particle coordinates (x,y,z coordinates)
+    coords : pandas array containing the particle coordinates (x,y,z coordinates)
     r : r values for g(r)
     g(r) : radial distribution function values
     k : vector values
@@ -199,6 +304,9 @@ def chain_orientation_parameter(curr_coordinates,ex,nc,dp,coord_loc=[3,6]):
     
     coord (pandas dataframe): Current coordinates for ONE timestep. Do not 
     provide the coord output from extract.extract_unwrapped function.
+    ex (list): the unit vector for the direction
+    nc (int): number of chains in the system
+    dp (int): degree of polymerization of the system
     
     Returns:
     cop (float): Chain orientation parameter for the particular timestep 
@@ -295,9 +403,146 @@ def find_tracked_pairs(distances,cut_off):
     num_of_pairs=np.zeros(len(distances.keys()))
     index_list = np.asarray(np.where(distances['timestep_0'] < cut_off))
     for index,key in enumerate(distances):
+
         num_of_pairs[index] = np.asarray(
             np.where(np.take(distances[key],index_list) < cut_off)).shape[1]
     normalizer=np.amax(num_of_pairs)
     num_of_pairs_tracked=num_of_pairs/normalizer
     return num_of_pairs_tracked
+
+
+def msd(coord,r_0,coord_loc=[3,6]):
+    """Find the mean-squared displacement of the polymer at every timestep.
+
+    Args:
+    coords (dict):  dictionary with the number of timesteps as keys and 
+        coordinates of all atoms at the corresponding timestep as a pandas 
+        dataframe.
+    r_0 (numpy array): array containing the coordinates of the atoms/beads in 
+    the first timestep.
+    coord_loc (list): columns which contain the coordinates.
+
+    Returns:
+    msd_list (list): List containing msd at every given timestep
+    """
+
+    msd_list=[]
+    for key in coord:
+        r_curr=coord[key]
+        r_curr.sort_values(by=['id'],inplace=True)
+        r_curr=r_curr.iloc[:,coord_loc[0]:coord_loc[1]].values
+        dist=r_curr - r_0
+        dist=np.square(dist)
+        dist=np.sum(dist,axis=1)
+        msd_list.append(np.average(dist))
+    return msd_list
+
+def msd_molecular_com(coord,r_0_com,coord_loc=[3,6]):
+    """Find the mean-squared displacement of the molecular center of mass
+    of the chain.
+        Args:
+    coords (dict):  dictionary with the number of timesteps as keys and 
+        coordinates of all atoms at the corresponding timestep as a pandas 
+        dataframe.
+    r_0 (numpy array): array containing the coordinates of the center of the 
+    atoms/beads in the first timestep.
+    coord_loc (list): columns which contain the coordinates.
+
+    Returns:
+    msd_list (list): List containing msd at every given timestep
+    """
+    msd_list=[]
+    for key in coord:
+        r_curr=coord[key]
+        total_chains=sorted(r_curr.mol.unique())
+        r_curr_com=np.empty((len(total_chains),3),dtype=None)
+        for chain in total_chains:
+            curr_chain=r_curr[r_curr['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values
+            curr_chain_com=np.mean(curr_chain,axis=0)
+            r_curr_com[int(chain-1),:]=curr_chain_com
+        dist=r_curr_com-r_0_com
+        dist=np.square(dist)
+        dist=np.sum(dist,axis=1)
+        msd_list.append(np.average(dist))
+    return msd_list
+
+def msd_com_inner(coord,r_0,r_0_com,coord_loc=[3,6]):
+    """g2(t)
+    https://onlinelibrary.wiley.com/doi/abs/10.1002/polb.23175
+    """ 
+    msd_list=[]
+    for key in coord:
+        r_curr=coord[key]
+        total_chains=sorted(r_curr.mol.unique())
+        r_curr_com=np.empty((0,3))
+        for chain in total_chains:
+            curr_chain=r_curr[r_curr['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values
+            dp=len(r_curr[r_curr['mol']==chain].iloc[:,coord_loc[0]].values)
+            curr_chain_com=np.mean(curr_chain,axis=0)
+            curr_chain_com_tile=np.tile(curr_chain_com,(dp,1))
+            r_curr_com=np.append(r_curr_com,curr_chain_com_tile,axis=0)
+        r_curr=coord[key]
+        r_curr.sort_values(by=['id'],inplace=True)
+        r_curr=r_curr.iloc[:,coord_loc[0]:coord_loc[1]].values
+        dist=r_curr - r_0
+        dist=dist-r_curr_com 
+        dist=np.square(dist)
+        dist=np.sum(dist,axis=1)
+        msd_list.append(np.average(dist))
+    return msd_list
+        
+
+def bonded_beads_distance(simname,coord_loc=[3,6],first_only=False,save=False):
+    """Find the mean distance between bonded beads and plot a histogram
+    for the same.
+
+    Args:
+    simname (str): Name of the simulation file that needs to be analyzed.
+    coord_loc (list): Column index for the coordinates (x and z, respectively) 
+    in the trajectory file.
+    first_only (bool): Look at the first frame (True) 
+    or last frame (False) of the trajectory file.
+    
+    Returns:
+    mean_dist (float): Mean distance between bonded beads
+    """
+    if first_only:
+        df, boxsize =extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    else:
+        df, boxsize=extract.extract_unwrapped(simname,last_only=True,boxsize=True)
+    coord=df['timestep_0']
+    del df
+    coord.sort_values(by=['id'],inplace=True)
+    chains = coord['mol'].unique()
+    diff_array=np.array([])
+    for chain in chains:
+        curr_chain_coords=coord[coord['mol']==chain].values[:,coord_loc[0]:coord_loc[1]]
+        one_row_shifted=curr_chain_coords[1:,:]
+        curr_chain_coords= np.delete(curr_chain_coords,-1,0)
+        curr_diff_array=curr_chain_coords - one_row_shifted
+        sidehalf = boxsize/2
+        for index_c in range(len(curr_diff_array)):
+            if (curr_diff_array[index_c][0] < -sidehalf): 
+                curr_diff_array[index_c][0] = curr_diff_array[index_c][0] + boxsize
+            if (curr_diff_array[index_c][0] > sidehalf):
+                curr_diff_array[index_c][0] = curr_diff_array[index_c][0] - boxsize
+            if (curr_diff_array[index_c][1] < -sidehalf): 
+                curr_diff_array[index_c][1] = curr_diff_array[index_c][1] + boxsize
+            if (curr_diff_array[index_c][1] > sidehalf):
+                curr_diff_array[index_c][1] = curr_diff_array[index_c][1] - boxsize
+            if (curr_diff_array[index_c][2] < -sidehalf): 
+                curr_diff_array[index_c][2] = curr_diff_array[index_c][2] + boxsize
+            if (curr_diff_array[index_c][2] > sidehalf):
+                curr_diff_array[index_c][2] = curr_diff_array[index_c][2] - boxsize
+        curr_diff_array=np.linalg.norm((curr_diff_array),axis=1)
+        diff_array=np.append(diff_array,curr_diff_array)
+    plt.hist(curr_diff_array)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.xlabel('Bond length',fontsize=20,fontfamily='Serif')
+    if save:
+        plt.tight_layout()
+        plt.savefig(simname +'_bond_length.png',dpi=300)
+    return np.mean(diff_array)
+
 

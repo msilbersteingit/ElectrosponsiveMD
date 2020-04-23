@@ -120,7 +120,8 @@ def extract_log_thermo(simname):
         
     return log_thermo
 
-def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],first_only=False):
+def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],first_only=False,
+last_only=False,boxsize=False):
     """Extract coordinates of all atoms from unwrapped trajectory files with 
     format 'id','mol','type','xu','yu','zu'
     Args:
@@ -147,11 +148,12 @@ def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],fi
         except IndexError:
             index+=1
     natoms=int(unwrap.iloc[index+1].str.split()[0][0])
+    first_timestep_lines = natoms + 9
     index=0
     timestep=0
     coord={}
     if first_only:
-        while index<500:
+        while index<first_timestep_lines:
             line=unwrap.iloc[index].str.split()
             try:
                 if line[0][0]=='ITEM:' and line[0][1]=='ATOMS':
@@ -177,6 +179,35 @@ def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],fi
                     index+=1
             except IndexError:
                 index+=1
+    elif last_only:
+        index = len(unwrap) - natoms - 15 #15 is an arbitrary chosen value
+        while index<len(unwrap):
+            line=unwrap.iloc[index].str.split()
+            try:
+                if line[0][0]=='ITEM:' and line[0][1]=='ATOMS':
+                    length=len(unwrap.iloc[index+1].str.split()[0])
+                    df2=unwrap.iloc[index+1:index+natoms+1]
+                    df2=df2[0].str.split(' ', length-1,expand=True) 
+                        #Split based on separator - expensive
+                    num2str = lambda x : float(x) 
+                        #convert all elements from str to float
+                    df2 = df2.applymap(num2str) 
+                        #apply num2str to every element - expensive
+                    df2.columns=format_spec
+                        #add corresponding column labels
+                    df2=df2.sort_values(by=['id']) 
+                        #sort based on atom id so that future operations 
+                        # are easy.
+                    key='timestep_' + str(timestep) 
+                        #save in the corresponding dictionary.
+                    coord[key]= df2
+                    index=index + natoms
+                    timestep+=1
+                else:
+                    index+=1
+            except IndexError:
+                index+=1
+
     else:
         while index<len(unwrap):
             line=unwrap.iloc[index].str.split()
@@ -204,6 +235,36 @@ def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],fi
                     index+=1
             except IndexError:
                 index+=1
+    if boxsize:
+        index=0
+        if first_only:
+            while index<first_timestep_lines:
+                line=unwrap.iloc[index].str.split()
+                try:
+                    if line[0][0]=='ITEM:' and line[0][1]=='BOX':
+                        df2=unwrap.iloc[index+1:index+2]
+                        df2=df2[0].str.split(' ').values
+                        boxsizev=float(df2[0][1]) - float(df2[0][0])                            
+                        return coord, boxsizev
+                    else:
+                        index+=1
+                except IndexError:
+                    index+=1
+        if last_only:
+            index = len(unwrap) - natoms - 20 #15 is an arbitrary chosen value
+            while index<len(unwrap):
+                line=unwrap.iloc[index].str.split()
+                try:
+                    if line[0][0]=='ITEM:' and line[0][1]=='BOX':
+                        df2=unwrap.iloc[index+1:index+2]
+                        df2=df2[0].str.split(' ').values
+                        boxsizev=float(df2[0][1]) - float(df2[0][0])                            
+                        return coord, boxsizev
+                    else:
+                        index+=1
+                except IndexError:
+                    index+=1
+
 
     return coord
 
@@ -296,11 +357,11 @@ def read_boxsize(simname,last_timestep=173):
     prop_constant=[None]*last_timestep
     while timestep<=last_timestep:
         curr_size_x = (float(unwrap.iloc[prev_index + 10009].str.split()[0][1])
-                       - float(unwrap.iloc[prev_index + 10009].str.split()[0][0]))
+                       - float(unwrap.iloc[prev_index + 10009].str.split()[0][0]))/ref_size_x
         curr_size_y = (float(unwrap.iloc[prev_index + 10010].str.split()[0][1]) 
-                       - float(unwrap.iloc[prev_index + 10010].str.split()[0][0]))
+                       - float(unwrap.iloc[prev_index + 10010].str.split()[0][0]))/ref_size_y
         curr_size_z = (float(unwrap.iloc[prev_index + 10011].str.split()[0][1]) 
-                       - float(unwrap.iloc[prev_index + 10011].str.split()[0][0]))
+                       - float(unwrap.iloc[prev_index + 10011].str.split()[0][0]))/ref_size_z
         px=round(curr_size_x,2)
         py=round(curr_size_y,2)
         pz=round(curr_size_z,2)
@@ -309,42 +370,48 @@ def read_boxsize(simname,last_timestep=173):
         timestep+=1
     return prop_constant
 
+def read_boxsize_generic(simname,nc,dp,last_timestep=173):
+    """Reads the box size of the simulation from the unwrapped coordinates 
+    trajectory.
 
-def temp_func(simname,ids):
-    """
-    This function reads the given LAMMPS simulation name (if present somewhere
-    in the current directory or subdirectories) and returns a numpy array 
-    containing the file's output (log, lammpstrj, def1, def2).
-    
-    *def* files are usually created by Raiter during deformations. They are 
-    clutter-free and contain only numbers. This function will NOT work for log
-    files. For log files, please check extract_log_thermo function.
-    
     Args:
-    simname (str): name of the *def* file
-    syntax (str): the format specification of the requested def file. Default
-     is '18f'
+    simname (str): name of the LAMMPS simulation.
     
     Returns:
-    def1 (dataframe): Pandas dataframe containing the output from the *def1*
-                      file.
-    def2 (dataframe): Pandas dataframe containing output from the *def2* file.
+    prop_constant (np array): an array  containing the proportionality
+                              constant pertaining to the increase in size of
+                              the box (along x, y and z) at every timestep.
     """
-    fname={}
-    col_index=[1,2,3,1,2,3]
-    dirs = ['x','y','z','x','y','z']
-    for index in range(6):
-        fname[index] = simname + '_' + str(ids[int(index/3)]) + '_' + dirs[index]
-    for index in range(6):
-        dump_wrapped, dump_unwrapped, dump_def1,dump_def2,\
-            dump_def3, log_file=fileIO.retrieve_different_filetypes(fname[index])
-        path=fileIO.findInSubdirectory(dump_def1)
-        column_names=['strain','pxx','pyy','pzz','lx','ly','lz','temp','epair',
-                    'ebond','eangle','edihed','ecoul','evdwl','etotal','pe','ke',
-                    'density']
-        def1=pd.read_csv(path,delim_whitespace=True,
-                        skiprows=1,dtype=np.float64,
-                        names=column_names,
-                        index_col=False) #Read and skip the first line
-        df = def1.iloc[0:8, col_index[index]].round(6)*1000
-        print(df.to_string(index=False))
+    dump_wrapped, dump_unwrapped, dump_def1, dump_def2,\
+        dump_def3, log_file=fileIO.retrieve_different_filetypes(simname)
+    path=fileIO.findInSubdirectory(dump_unwrapped)
+    unwrap=pd.read_csv(path,header=None,index_col=False)
+    index=0
+    
+    timestep=1
+    prev_index=-(nc*dp +4)
+    next_x_add = nc*dp + 9
+    next_y_add = nc*dp + 10
+    next_z_add = nc*dp + 11
+    ref_size_x = (float(unwrap.iloc[prev_index + next_x_add].str.split()[0][1]) 
+                  - float(unwrap.iloc[prev_index + next_x_add].str.split()[0][0]))
+    print(ref_size_x)
+    ref_size_y = (float(unwrap.iloc[prev_index + next_y_add].str.split()[0][1]) 
+                  - float(unwrap.iloc[prev_index + next_y_add].str.split()[0][0]))
+    ref_size_z = (float(unwrap.iloc[prev_index + next_z_add].str.split()[0][1]) 
+                  - float(unwrap.iloc[prev_index + next_z_add].str.split()[0][0]))
+    prop_constant=[None]*last_timestep
+    while timestep<=last_timestep:
+        curr_size_x = (float(unwrap.iloc[prev_index + next_x_add].str.split()[0][1])
+                       - float(unwrap.iloc[prev_index + next_x_add].str.split()[0][0]))/ref_size_x
+        curr_size_y = (float(unwrap.iloc[prev_index + next_y_add].str.split()[0][1]) 
+                       - float(unwrap.iloc[prev_index + next_y_add].str.split()[0][0]))/ref_size_y
+        curr_size_z = (float(unwrap.iloc[prev_index + next_z_add].str.split()[0][1]) 
+                       - float(unwrap.iloc[prev_index + next_z_add].str.split()[0][0]))/ref_size_z
+        px=round(curr_size_x,2)
+        py=round(curr_size_y,2)
+        pz=round(curr_size_z,2)
+        prop_constant[timestep-1]=[px,py,pz]
+        prev_index+=next_x_add
+        timestep+=1
+    return prop_constant
