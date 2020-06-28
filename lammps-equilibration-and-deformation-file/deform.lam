@@ -1,0 +1,117 @@
+# CoarseGrain Electric Field Input File
+
+# Variables
+variable simname index CG_256C_128DP_v20_deform_lj_kg_uk_2_x
+
+# Initialization
+units		lj
+dimension   3
+boundary	p p p
+atom_style	full
+log 		log.${simname}.txt
+
+# Potential information
+read_restart	restart.CG_256C_128DP_v20_equilibrate_lj_kg_uk_2.dreiding4
+neighbor	0.5 bin
+neigh_modify	every 1 delay 0 check yes 
+bond_style      fene 
+bond_coeff	1 30 1.5 1 1 
+special_bonds	fene
+pair_style	lj/cut/coul/cut 2.5
+pair_coeff	* * 1 1 
+dump positions all custom 200 ${simname}.lammpstrj id mol type xs ys zs
+dump positions2 all custom 200 ${simname}.unwrapped.lammpstrj id mol type xu yu zu
+
+######################################################
+### Uniaxial Tensile Deformation
+run 0
+
+group positive type 2
+group negative type 3
+group ions type 2 3
+group neutral type 1 
+
+compute meansquarep positive msd
+compute meansquaren negative msd
+compute meansquarei ions msd
+compute meansquareu neutral msd
+compute nongaussp positive msd/nongauss
+compute nongaussn negative msd/nongauss
+compute nongaussi ions msd/nongauss
+compute nongaussu neutral msd/nongauss
+compute msdall all msd
+compute ngpall all msd/nongauss
+
+variable tmp equal "lx"
+variable L0 equal ${tmp}
+variable strain equal "(lx - v_L0)/v_L0"
+variable p1 equal "v_strain"
+variable p2 equal "-pxx"
+variable p3 equal "-pyy"
+variable p4 equal "-pzz"
+variable p5 equal "lx"
+variable p6 equal "ly"
+variable p7 equal "lz"
+variable p8 equal "temp"
+variable t2 equal "epair"
+variable t3 equal "ebond"
+variable t4 equal "eangle"
+variable t5 equal "edihed"
+variable t6 equal "ecoul"
+variable t7 equal "evdwl"
+variable t8 equal "etotal"
+variable t9 equal "pe"
+variable t10 equal "ke"
+variable t11 equal "density"
+variable t12 equal "c_meansquarep[1]"
+variable t13 equal "c_meansquarep[2]"
+variable t14 equal "c_meansquarep[3]"
+variable t15 equal "c_meansquarep[4]"
+variable t16 equal "c_meansquaren[1]"
+variable t17 equal "c_meansquaren[2]"
+variable t18 equal "c_meansquaren[3]"
+variable t19 equal "c_meansquaren[4]"
+variable t20 equal "c_meansquarei[1]"
+variable t21 equal "c_meansquarei[2]"
+variable t22 equal "c_meansquarei[3]"
+variable t23 equal "c_meansquarei[4]"
+variable t24 equal "c_meansquareu[1]"
+variable t25 equal "c_meansquareu[2]"
+variable t26 equal "c_meansquareu[3]"
+variable t27 equal "c_meansquareu[4]"
+variable t28 equal "c_nongaussp[1]"
+variable t29 equal "c_nongaussp[2]"
+variable t30 equal "c_nongaussp[3]"
+variable t31 equal "c_nongaussn[1]"
+variable t32 equal "c_nongaussn[2]"
+variable t33 equal "c_nongaussn[3]"
+variable t34 equal "c_nongaussi[1]"
+variable t35 equal "c_nongaussi[2]"
+variable t36 equal "c_nongaussi[3]"
+variable t37 equal "c_nongaussu[1]"
+variable t38 equal "c_nongaussu[2]"
+variable t39 equal "c_nongaussu[3]"
+variable t40 equal "c_msdall[1]"
+variable t41 equal "c_msdall[2]"
+variable t42 equal "c_msdall[3]"
+variable t43 equal "c_msdall[4]"
+variable t44 equal "c_ngpall[1]"
+variable t45 equal "c_ngpall[2]"
+variable t46 equal "c_ngpall[3]"
+#fix kick all efield 1.0 0.0 0.0
+fix		1 all npt temp 1 1 $(100*dt) y 0 0 $(1000*dt) z 0 0 $(1000*dt) drag 2
+fix		2 all deform 1 x erate 0.0327 units box remap x
+fix def1 all print 1 "${p1} ${p2} ${p3} ${p4} ${p5} ${p6} ${p7} ${p8} ${t2} ${t3} ${t4} ${t5} ${t6} ${t7} ${t8} ${t9} ${t10} ${t11}" file ${simname}.def1.txt screen no
+fix def2 all print 1 "${p1} ${t12} ${t13} ${t14} ${t15} ${t16} ${t17} ${t18} ${t19} ${t20} ${t21} ${t22} ${t23} ${t24} ${t25} ${t26} ${t27} ${t28} ${t29} ${t30} ${t31} ${t32} ${t33} ${t34} ${t35} ${t36} ${t37} ${t38} ${t39} ${t40} ${t41} ${t42} ${t43} ${t44} ${t45} ${t46} " file ${simname}.def2.txt screen no
+thermo_style	custom step temp density pxx pyy pzz etotal ke pe evdwl epair ebond ecoul
+thermo          1
+thermo_modify 	norm no
+timestep	0.005
+reset_timestep	0
+run		10520
+unfix 1
+unfix 2
+unfix def1
+unfix def2
+
+print "All done"

@@ -1,0 +1,288 @@
+
+# Dreiding potential information
+#read_restart	restart.CG_300C_100DP_v9_equilibrate_lj_kg_uk_4.dreiding5
+read_data	CG_256C_128DP_d0p25_cp10_cv10.data
+  orthogonal box = (0 0 0) to (51 51 51)
+  1 by 1 by 1 MPI processor grid
+  reading atoms ...
+  32768 atoms
+  scanning bonds ...
+  1 = max bonds/atom
+  scanning angles ...
+  1 = max angles/atom
+  scanning dihedrals ...
+  1 = max dihedrals/atom
+  reading bonds ...
+  32512 bonds
+  reading angles ...
+  32256 angles
+  reading dihedrals ...
+  32000 dihedrals
+  2 = max # of 1-2 neighbors
+  2 = max # of 1-3 neighbors
+  4 = max # of 1-4 neighbors
+  6 = max # of special neighbors
+neighbor	0.5 bin
+neigh_modify	every 1 delay 0 check yes
+bond_style      fene
+bond_coeff	1 30 1.5 1 1
+special_bonds	fene
+  2 = max # of 1-2 neighbors
+  6 = max # of special neighbors
+pair_style soft 1.122
+pair_coeff * * $(4 + 0.024*step)
+pair_coeff * * 4
+#pair_style	lj/cut/coul/cut 2.5
+#kspace_style ewald 1.0e-2
+pair_coeff	* * 1 1
+dump positions all custom 200 ${simname}.lammpstrj id mol type xs ys zs
+dump positions all custom 200 CG_256C_128DP_v20_equilibrate_lj_kg_uk_1.lammpstrj id mol type xs ys zs
+dump positions2 all custom 200 ${simname}.unwrapped.lammpstrj id mol type xu yu zu
+dump positions2 all custom 200 CG_256C_128DP_v20_equilibrate_lj_kg_uk_1.unwrapped.lammpstrj id mol type xu yu zu
+#dielectric 3
+
+
+### Equilibration Stage 0
+fix 1 all nvt temp 1.5 1.5 $(100.0*dt)
+fix 1 all nvt temp 1.5 1.5 0.5
+fix extra all print 100 "Value of A: $(4 + 0.024*step)"
+thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+thermo          100
+timestep	0.005
+reset_timestep 0
+run		4000
+Neighbor list info ...
+  update every 1 steps, delay 0 steps, check yes
+  max neighbors/atom: 2000, page size: 100000
+  master list distance cutoff = 1.5
+  ghost atom cutoff = 1.5
+  binsize = 0.75, bins = 68 68 68
+  1 neighbor lists, perpetual/occasional/extra = 1 0 0
+  (1) pair soft, perpetual
+      attributes: half, newton on
+      pair build: half/bin/newton
+      stencil: half/bin/3d/newton
+      bin: standard
+WARNING: Inconsistent image flags (../domain.cpp:782)
+Per MPI rank memory allocation (min/avg/max) = 32.56 | 32.56 | 32.56 Mbytes
+Step Temp Press Density PotEng KinEng TotEng E_vdwl E_pair E_bond E_coul 
+       0            0    -2.320289   0.24702415    21.274512            0    21.274512   0.59950716   0.59950716    20.675005            0 
+Value of A: 6.4000000000000003553
+     100   0.49891206  0.097818634   0.24702415    20.603383   0.74834525    21.351729   0.20710988   0.20710988    20.396274            0 
+Value of A: 8.8000000000000007105
+     200   0.65034929 -0.026097727   0.24702415    20.536069   0.97549416    21.511563   0.12043438   0.12043438    20.415634            0 
+Value of A: 11.199999999999999289
+     300   0.77200308    0.0111476   0.24702415    20.556542    1.1579693    21.714511   0.10043336   0.10043336    20.456109            0 
+Value of A: 13.599999999999999645
+     400   0.89764726  0.024809016   0.24702415    20.604499    1.3464298    21.950929   0.10452132   0.10452132    20.499978            0 
+Value of A: 16
+     500     1.034062  0.038425557   0.24702415    20.662971    1.5510456    22.214017   0.11222607   0.11222607    20.550745            0 
+Value of A: 18.399999999999998579
+     600    1.1837517  0.026878702   0.24702415    20.717321    1.7755734    22.492895   0.12158017   0.12158017    20.595741            0 
+Value of A: 20.800000000000000711
+     700    1.3206251  0.043009049   0.24702415    20.788901    1.9808772    22.769778   0.13430469   0.13430469    20.654596            0 
+Value of A: 23.199999999999999289
+     800    1.4461768   0.02263575   0.24702415    20.846769     2.169199    23.015968   0.14441998   0.14441998    20.702349            0 
+Value of A: 25.600000000000001421
+     900    1.5310224 0.0044392788   0.24702415     20.89246    2.2964636    23.188924   0.15896662   0.15896662    20.733494            0 
+Value of A: 28
+    1000    1.5497629  0.012655227   0.24702415    20.908227    2.3245734      23.2328   0.16434069   0.16434069    20.743886            0 
+Value of A: 30.400000000000002132
+    1100    1.4956825 -0.0088325255   0.24702415    20.903091    2.2434553    23.146547   0.16647696   0.16647696    20.736614            0 
+Value of A: 32.799999999999997158
+    1200    1.4621937  0.013834511   0.24702415    20.885701    2.1932236    23.078924   0.16691607   0.16691607    20.718785            0 
+Value of A: 35.200000000000002842
+    1300    1.4786158  0.017599003   0.24702415    20.898653     2.217856    23.116509   0.16518226   0.16518226     20.73347            0 
+Value of A: 37.600000000000001421
+    1400    1.5199407  0.055423378   0.24702415    20.919982    2.2798414    23.199823   0.16674283   0.16674283    20.753239            0 
+Value of A: 40
+    1500    1.5340128  0.054308756   0.24702415    20.917929     2.300949    23.218878   0.16848736   0.16848736    20.749442            0 
+Value of A: 42.399999999999998579
+    1600    1.4935798  0.013310046   0.24702415    20.916547    2.2403014    23.156848   0.16597463   0.16597463    20.750572            0 
+Value of A: 44.800000000000004263
+    1700    1.4691979  0.020965157   0.24702415    20.908126    2.2037296    23.111856   0.16600607   0.16600607     20.74212            0 
+Value of A: 47.200000000000002842
+    1800    1.4895369  0.016001674   0.24702415    20.911081    2.2342371    23.145318    0.1651201    0.1651201    20.745961            0 
+Value of A: 49.600000000000001421
+    1900     1.520852  0.060815265   0.24702415    20.926691    2.2812083    23.207899   0.16890188   0.16890188    20.757789            0 
+Value of A: 52
+    2000    1.5280699  0.059659753   0.24702415    20.926549    2.2920349    23.218584   0.16832657   0.16832657    20.758222            0 
+Value of A: 54.399999999999998579
+    2100    1.4925949  0.033868851   0.24702415    20.930706    2.2388241    23.169531   0.16963572   0.16963572    20.761071            0 
+Value of A: 56.800000000000004263
+    2200    1.4722344  0.008118025   0.24702415    20.930824    2.2082842    23.139109   0.17018913   0.17018913    20.760635            0 
+Value of A: 59.200000000000002842
+    2300    1.4923583  0.028461707   0.24702415    20.934666    2.2384691    23.173135   0.17201518   0.17201518    20.762651            0 
+Value of A: 61.600000000000001421
+    2400    1.5157347  0.025218834   0.24702415    20.952637    2.2735326     23.22617   0.17149616   0.17149616    20.781141            0 
+Value of A: 64
+    2500    1.5229508  0.050586721   0.24702415    20.941499    2.2843565    23.225856   0.17100327   0.17100327    20.770496            0 
+Value of A: 66.400000000000005684
+    2600    1.4931855 0.0055538173   0.24702415    20.936713    2.2397099    23.176423   0.16795889   0.16795889    20.768754            0 
+Value of A: 68.799999999999997158
+    2700    1.4772395 -0.0044829776   0.24702415    20.936919    2.2157916    23.152711    0.1705029    0.1705029    20.766416            0 
+Value of A: 71.200000000000002842
+    2800    1.4939655  0.037648532   0.24702415    20.950374    2.2408799    23.191254   0.17120059   0.17120059    20.779174            0 
+Value of A: 73.600000000000008527
+    2900    1.5211059  0.035491523   0.24702415    20.958482    2.2815892    23.240072   0.16514559   0.16514559    20.793337            0 
+Value of A: 76
+    3000    1.5123615  0.040967062   0.24702415    20.959374     2.268473    23.227847   0.16976053   0.16976053    20.789614            0 
+Value of A: 78.400000000000005684
+    3100    1.4900222  0.054986027   0.24702415    20.948056     2.234965    23.183021   0.16778793   0.16778793    20.780268            0 
+Value of A: 80.799999999999997158
+    3200    1.4829722  0.053675661   0.24702415     20.94465    2.2243904    23.169041   0.16458634   0.16458634    20.780064            0 
+Value of A: 83.200000000000002842
+    3300    1.4983044 -0.005215905   0.24702415    20.955319    2.2473881    23.202707   0.16393509   0.16393509    20.791384            0 
+Value of A: 85.600000000000008527
+    3400    1.5179819 0.0099429796   0.24702415    20.960236    2.2769034     23.23714   0.16627144   0.16627144    20.793965            0 
+Value of A: 88
+    3500    1.5082803  0.014707141   0.24702415    20.965314    2.2623514    23.227666     0.168655     0.168655    20.796659            0 
+Value of A: 90.400000000000005684
+    3600    1.4920814  0.028450025   0.24702415    20.956681    2.2380538    23.194735   0.16794326   0.16794326    20.788738            0 
+Value of A: 92.799999999999997158
+    3700    1.4853839  0.011837798   0.24702415    20.957777    2.2280078    23.185785   0.16674102   0.16674102    20.791036            0 
+Value of A: 95.200000000000002842
+    3800     1.499202  0.032215347   0.24702415     20.96346    2.2487343    23.212194   0.16928498   0.16928498    20.794175            0 
+Value of A: 97.600000000000008527
+    3900    1.5148304  0.015658395   0.24702415    20.965993    2.2721763    23.238169   0.16603449   0.16603449    20.799958            0 
+Value of A: 100
+    4000    1.5080283  0.029722537   0.24702415    20.967092    2.2619735    23.229066   0.16616816   0.16616816    20.800924            0 
+Loop time of 89.7705 on 1 procs for 4000 steps with 32768 atoms
+
+Performance: 19249.079 tau/day, 44.558 timesteps/s
+99.7% CPU use with 1 MPI tasks x 1 OpenMP threads
+
+MPI task timing breakdown:
+Section |  min time  |  avg time  |  max time  |%varavg| %total
+---------------------------------------------------------------
+Pair    | 29.701     | 29.701     | 29.701     |   0.0 | 33.09
+Bond    | 13.286     | 13.286     | 13.286     |   0.0 | 14.80
+Neigh   | 19.613     | 19.613     | 19.613     |   0.0 | 21.85
+Comm    | 4.0595     | 4.0595     | 4.0595     |   0.0 |  4.52
+Output  | 10.137     | 10.137     | 10.137     |   0.0 | 11.29
+Modify  | 10.632     | 10.632     | 10.632     |   0.0 | 11.84
+Other   |            | 2.341      |            |       |  2.61
+
+Nlocal:    32768 ave 32768 max 32768 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Nghost:    5909 ave 5909 max 5909 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+Neighs:    66571 ave 66571 max 66571 min
+Histogram: 1 0 0 0 0 0 0 0 0 0
+
+Total # of neighbors = 66571
+Ave neighs/atom = 2.03159
+Ave special neighs/atom = 1.98438
+Neighbor list builds = 460
+Dangerous builds = 0
+unfix 1
+write_restart 	restart.${simname}.dreiding0
+write_restart 	restart.CG_256C_128DP_v20_equilibrate_lj_kg_uk_1.dreiding0
+
+######################################################
+#### Equilibration Stage 1 (Langevin dynamics at 500 K)
+#velocity 	all create 1.5 1231
+#fix		1 all nve/limit 0.05
+#fix		2 all langevin 1.5 1.5 $(10.0*dt) 904297
+##compute 1 all bond/local dist engpot force
+##compute 2 all pair/local dist eng force
+##compute 3 all reduce ave c_1[*] c_2[*]
+#thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+#thermo          1000
+#timestep	0.005
+#reset_timestep  0
+#run		2000000
+#unfix 1
+#unfix 2
+#write_restart 	restart.${simname}.dreiding1
+#
+############################################################
+#### Equilibration Stage 2 (NPT dynamics at 500 K)
+#fix		1 all npt temp 1.5 1.5 $(100*dt) iso 0 0 $(1000*dt)
+#fix  		2 all momentum 1 linear 1 1 1
+#thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+#thermo          1000
+#timestep	0.005
+#reset_timestep	0
+#run		10000000
+#unfix 1
+#unfix 2
+#write_restart 	restart.${simname}.dreiding2
+####
+########################################################
+#### Equilibration Stage 3 (NPT dynamics from 500 K --> 100 K)
+#fix		1 all npt temp 1.5 1.0 $(100*dt) iso 0 0 $(1000*dt)
+#fix		2 all momentum 1 linear 1 1 1
+#thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+#thermo          1000
+#timestep	0.005
+#reset_timestep 	0
+#
+#run		10000000
+#unfix 1
+#unfix 2
+#write_restart 	restart.${simname}.dreiding3
+###
+#######################################################
+###### Equilibration Stage 4 (NPT dynamics at 100 K)
+#fix		1 all npt temp 1.0 1.0 $(100*dt) iso 0 0 $(1000*dt)
+#fix		2 all momentum 1 linear 1 1 1
+#thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+#thermo          1000
+#timestep	0.005
+#reset_timestep 	0
+#
+#run		10000000
+#unfix 1
+#unfix 2
+#write_restart 	restart.${simname}.dreiding4
+#
+###### Equilibration Stage 5 (NPT dynamics WITH COULOMBIC INTERACTIONS TURNED ON)
+#fix		1 all npt temp 1.0 1.0 $(100*dt) iso 0 0 $(1000*dt) drag 2
+#fix		2 all momentum 1 linear 1 1 1
+#thermo_style	custom step temp press density pe ke etotal evdwl epair ebond ecoul
+#thermo          1000
+#timestep	0.005
+#reset_timestep 	0
+#
+#run		10000000
+#unfix 1
+#unfix 2
+#write_restart 	restart.${simname}.dreiding5
+###
+#
+######################################################
+### Uniaxial Tensile Deformation
+##run 0
+##variable tmp equal "lx"
+##variable L0 equal ${tmp}
+##variable strain equal "(lx - v_L0)/v_L0"
+##variable p1 equal "v_strain"
+##variable p2 equal "-pxx/10000*1.01325"
+##variable p3 equal "-pyy/10000*1.01325"
+##variable p4 equal "-pzz/10000*1.01325"
+##variable p5 equal "lx"
+##variable p6 equal "ly"
+##variable p7 equal "lz"
+##variable p8 equal "temp"
+##variable t2 equal "epair"
+##variable t3 equal "ebond"
+##variable t4 equal "eangle"
+##variable t5 equal "edihed"
+###fix kick all efield 1.0 0.0 0.0
+##fix		1 all npt temp 100 100 50 y 0 0 1000 z 0 0 1000 drag 2
+##fix		2 all deform 1 x erate 1e-6 units box remap x
+##fix def1 all print 100 "${p1} ${p2} ${p3} ${p4} ${p5} ${p6} ${p7} ${p8}" file ${simname}.def1.txt screen no
+##fix def2 all print 100 "${p1} ${t2} ${t3} ${t4} ${t5}" file ${simname}.def2.txt screen no
+##thermo_style	custom step temp density pxx pyy pzz etotal ke pe evdwl epair ebond ecoul
+##thermo          100
+##timestep	0.5
+##reset_timestep	0
+##run		600000
+##unfix 1
+##unfix 2
+##unfix def1
+##unfix def2
+##
+#print "All done"
+Total wall time: 0:01:31
