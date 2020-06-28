@@ -57,7 +57,6 @@ def extract_def(simname,syntax='18f'):
                      names=column_names,index_col=False)
     return def1,def2
 
-
 def extract_log_thermo(simname):
     """Read and return the thermodynamic data from a LAMMMPS simulation file.
     Args:
@@ -101,7 +100,7 @@ def extract_log_thermo(simname):
                     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
                     #%%%%%%%%%%%%%%%% Read thermo data %%%%%%%%%%%%%%%%%%%%%%%
-                    df3.iloc[index+2:index+output_num+3].to_csv(r'./test.csv',
+                    df3.iloc[index+2:index+output_num+3].to_csv(r'.//test.csv',
                                                                 index=False,
                                                                 header=None) 
                                                                 #write dummy 
@@ -121,7 +120,7 @@ def extract_log_thermo(simname):
     return log_thermo
 
 def extract_unwrapped(simname,format_spec =['id','mol','type','xu','yu','zu'],first_only=False,
-last_only=False,boxsize=False):
+last_only=False,boxsize=False,boxsize_whole=False,start_end=False):
     """Extract coordinates of all atoms from unwrapped trajectory files with 
     format 'id','mol','type','xu','yu','zu'
     Args:
@@ -237,6 +236,7 @@ last_only=False,boxsize=False):
                 index+=1
     if boxsize:
         index=0
+        boxsizev=[None,None,None]
         if first_only:
             while index<first_timestep_lines:
                 line=unwrap.iloc[index].str.split()
@@ -244,8 +244,17 @@ last_only=False,boxsize=False):
                     if line[0][0]=='ITEM:' and line[0][1]=='BOX':
                         df2=unwrap.iloc[index+1:index+2]
                         df2=df2[0].str.split(' ').values
-                        boxsizev=float(df2[0][1]) - float(df2[0][0])                            
-                        return coord, boxsizev
+                        boxsizev[0]=float(df2[0][1]) - float(df2[0][0])                            
+                        dfy = unwrap.iloc[index+2:index+3]
+                        dfy=dfy[0].str.split(' ').values
+                        boxsizev[1]=float(dfy[0][1]) - float(dfy[0][0])
+                        dfz=unwrap.iloc[index+3:index+4]
+                        dfz=dfz[0].str.split(' ').values
+                        boxsizev[2]=float(dfz[0][1]) - float(dfz[0][0])
+                        if start_end:
+                            return coord, boxsizev, float(df2[0][1]),float(df2[0][0]),float(dfy[0][1]),float(dfy[0][0]),float(dfz[0][1]),float(dfz[0][0])
+                        else:
+                            return coord, boxsizev
                     else:
                         index+=1
                 except IndexError:
@@ -258,12 +267,46 @@ last_only=False,boxsize=False):
                     if line[0][0]=='ITEM:' and line[0][1]=='BOX':
                         df2=unwrap.iloc[index+1:index+2]
                         df2=df2[0].str.split(' ').values
-                        boxsizev=float(df2[0][1]) - float(df2[0][0])                            
+                        boxsizev[0]=float(df2[0][1]) - float(df2[0][0])                            
+                        dfy = unwrap.iloc[index+2:index+3]
+                        dfy=dfy[0].str.split(' ').values
+                        boxsizev[1]=float(dfy[0][1]) - float(dfy[0][0])
+                        dfz=unwrap.iloc[index+3:index+4]
+                        dfz=dfz[0].str.split(' ').values
+                        boxsizev[2]=float(dfz[0][1]) - float(dfz[0][0])                        
                         return coord, boxsizev
                     else:
                         index+=1
                 except IndexError:
                     index+=1
+    if boxsize_whole:
+        index=0
+        timestep=0
+        boxsize_whole_dict={}
+        boxsizev=[None,None,None]
+        while index<len(unwrap):
+            line=unwrap.iloc[index].str.split()
+            try:
+                if line[0][0]=='ITEM:' and line[0][1]=='BOX':
+                        df2=unwrap.iloc[index+1:index+2]
+                        df2=df2[0].str.split(' ').values
+                        boxsizev[0]=float(df2[0][1]) - float(df2[0][0])                            
+                        dfy = unwrap.iloc[index+2:index+3]
+                        dfy=dfy[0].str.split(' ').values
+                        boxsizev[1]=float(dfy[0][1]) - float(dfy[0][0])
+                        dfz=unwrap.iloc[index+3:index+4]
+                        dfz=dfz[0].str.split(' ').values
+                        boxsizev[2]=float(dfz[0][1]) - float(dfz[0][0]) 
+                        key='timestep_' + str(timestep)
+                        boxsize_whole_dict[key] = [boxsizev[0],boxsizev[1],boxsizev[2]]
+                        index=index+natoms
+                        timestep+=1
+                else:
+                        index+=1
+            except IndexError:
+                index+=1
+        return coord,boxsize_whole_dict
+
 
 
     return coord

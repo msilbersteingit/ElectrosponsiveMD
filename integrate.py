@@ -1,6 +1,7 @@
 from analib import extract
 from analib import compute
 from analib import plotting_functions
+from matplotlib.ticker import FormatStrFormatter
 import pandas as pd
 import hickle as hkl
 import numpy as np
@@ -14,12 +15,18 @@ def rdf(coordinates, box_l, simname, coords_loc=[3,6], nhis = 200,
         coords_loc, nhis)
     plotting_functions.radial_distribution_function_plotting(g,r,simname,save,style)
 
-def compare_rdf(simname,nhis,bool_first,coords_loc=[3,6],linewidthv=2,save=False):
-    fig = plt.figure(figsize=(8,8))
-    plt.xlabel('$r$',fontsize=20)
-    plt.ylabel('$g(r)$',fontsize=20)
-    plt.xticks(fontsize=14)
-    plt.yticks(fontsize=14)
+def compare_rdf(simname,nhis,labels,bool_first,coords_loc=[3,6],linewidthv=2,save=False):
+    fig = plt.figure(figsize=(8,8),dpi=100)
+    ax = fig.add_subplot(1,1,1)
+    fontProperties = {'family':'serif','size':20}
+    ax.set_xticklabels(ax.get_xticks(),{'family':'serif','size':16})
+    ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax.set_xlabel('$r$',fontProperties)
+    ax.tick_params(direction='in')
+    ax.set_yticklabels(ax.get_yticks(),{'family':'serif','size':16})
+    ax.yaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax.set_ylabel('$g(r)$',fontProperties)
+    ax.tick_params(direction='in')
     for index,filename in enumerate(simname):
         if bool_first[index]==0:
             df,bs=extract.extract_unwrapped(filename,last_only=True,boxsize=True)
@@ -29,8 +36,8 @@ def compare_rdf(simname,nhis,bool_first,coords_loc=[3,6],linewidthv=2,save=False
         del df
         g,r = compute.radial_distribution_function(coord,bs,filename,
         coords_loc,nhis)
-        plt.plot(r,g,linewidth=linewidthv,label=filename)
-    plt.legend()
+        ax.plot(r,g,linewidth=linewidthv,label=labels[index])
+    ax.legend(fontsize=16)
     if save:
         plt.savefig(simname[index] +'_comparison.png',dpi=300)
 
@@ -107,7 +114,7 @@ def chain_orientation_parameter_combined(simname, nfiles, nc, dp):
     hkl.dump(cop_z, dumpnamez)
     return zip(cop_x, cop_y, cop_z)
 
-def radius_of_gyration_squared_integrated(*args,mass=1):
+def radius_of_gyration_squared_integrated(*args,mass=1,sidechain=False):
     """
     Enter the filenames of multiple parts of the same simulation
     and this file will return the cumulative R_g^2 for all of them
@@ -117,13 +124,13 @@ def radius_of_gyration_squared_integrated(*args,mass=1):
     *args (string): filenames of the simulation.
 
     Returns:
-    Plot of R_g ^2vs time and R_g^2
+    Rog ^2, Rend^2
     """
     rog_sq=[]
     rend_sq=[]
     for filename in args:
-        df_unwrap=extract.extract_unwrapped(filename)
-        rend_sq_curr,gauss_curr = compute.end_to_end_distance_squared(df_unwrap)
+        df_unwrap,bs=extract.extract_unwrapped(filename,boxsize_whole=True)
+        rend_sq_curr,gauss_curr = compute.end_to_end_distance_squared(df_unwrap,bs, sidechain=sidechain)
         rog_sq_curr=compute.radius_of_gyration_squared(df_unwrap,mass)
         rog_sq=rog_sq+rog_sq_curr
         rend_sq=rend_sq+rend_sq_curr

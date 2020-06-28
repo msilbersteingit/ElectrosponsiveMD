@@ -11,10 +11,11 @@ import matplotlib as mpl
 from analib import fileIO
 from analib import extract
 from analib import integrate
+from analib import compute
 
 imagesavepath=r'c:/Users/Raiter/OneDrive - Cornell University/Thesis/Results/images_from_jupyter_notebook/'
 
-def find_cumulative_pairs(distances,cut_off):
+def find_cumulative_pairs(distances,cut_off, normalized=True):
     """Return the number of pairs below the specified cut-off at each timestep
 
     Args:
@@ -31,11 +32,14 @@ def find_cumulative_pairs(distances,cut_off):
     for index,key in enumerate(distances):
         num_of_pairs[index]=np.asarray(
         np.where(distances[key]<cut_off)).shape[1]
-    normalizer=np.amax(num_of_pairs)
-    num_of_pairs_cumulative=num_of_pairs/normalizer
-    return num_of_pairs_cumulative
+    if normalized:
+        normalizer=np.amax(num_of_pairs)
+        num_of_pairs_cumulative=num_of_pairs/normalizer
+        return num_of_pairs_cumulative
+    else:
+        return num_of_pairs
 
-def find_hypothetical_pairs(dist_vec,distances,prop_constant,cut_off):
+def find_hypothetical_pairs(dist_vec,distances,prop_constant,cut_off,normalized=True):
     """Find the number of hypothetical pairs below the specified cutoff"""
     hypothetical_pair={}
     index_list = np.asarray(np.where(distances['timestep_0'] < cut_off))
@@ -49,20 +53,72 @@ def find_hypothetical_pairs(dist_vec,distances,prop_constant,cut_off):
             hypothetical_pair[hyp_index],axis=1)
         hpair[hyp_index]=np.asarray(
             np.where(hypothetical_pair[hyp_index] < cut_off)).shape[1]
-    normalizer=np.amax(hpair)
-    num_of_pairs_hypothetical=hpair/normalizer
-    return num_of_pairs_hypothetical
+    if normalized:
+        normalizer=np.amax(hpair)
+        num_of_pairs_hypothetical=hpair/normalizer
+        return num_of_pairs_hypothetical
+    else:
+        return hpair
 
-def find_tracked_pairs(distances,cut_off):
+def find_tracked_pairs(distances,cut_off,normalized=True):
     """Find the number of tracked pairs below the specified cutoff"""
     num_of_pairs=np.zeros(len(distances.keys()))
     index_list = np.asarray(np.where(distances['timestep_0'] < cut_off))
     for index,key in enumerate(distances):
         num_of_pairs[index] = np.asarray(
             np.where(np.take(distances[key],index_list) < cut_off)).shape[1]
-    normalizer=np.amax(num_of_pairs)
-    num_of_pairs_tracked=num_of_pairs/normalizer
-    return num_of_pairs_tracked
+    if normalized:
+        normalizer=np.amax(num_of_pairs)
+        num_of_pairs_tracked=num_of_pairs/normalizer
+        return num_of_pairs_tracked
+    else:
+        return num_of_pairs
+
+def find_tracked_pairs_unique(distances,simname):
+    """Find the number of tracked pairs below the specified cutoff"""
+    coord,bs=extract.extract_unwrapped(simname,boxsize_whole=True)
+    pairs_under_cutoff = np.zeros(len(coord.keys()))
+    charged_pair_distances={}
+    for index,key in enumerate(coord):
+        box_l=bs[key]
+        sidehx=box_l[0]/2
+        sidehy=box_l[1]/2
+        sidehz=box_l[2]/2
+        chargedpairdistance=np.zeros((1634,1))
+        for index_inner, atomid in enumerate(distances['timestep_0']):
+            current_timestep = coord[key]
+            pcharge=current_timestep[current_timestep['id']==atomid[0]].iloc[:,3:6].values
+            ncharge=current_timestep[current_timestep['id']==atomid[1]].iloc[:,3:6].values
+            dx = pcharge[0][0] - ncharge[0][0]
+            dy = pcharge[0][1] - ncharge[0][1]
+            dz = pcharge[0][2] - ncharge[0][2]
+            if (dx < -sidehx):   dx = dx + box_l[0]
+            if (dx > sidehx):    dx = dx - box_l[0]
+            if (dy < -sidehy):   dy = dy + box_l[1]
+            if (dy > sidehy):    dy = dy - box_l[1]
+            if (dz < -sidehz):   dz = dz + box_l[2]
+            if (dz > sidehz):    dz = dz - box_l[2]
+            distAB = [dx,dy,dz]
+            chargedpairdistance[index_inner] = np.linalg.norm(distAB)
+        chargedpairdistance = chargedpairdistance[chargedpairdistance!=0]
+        charged_pair_distances[index] = chargedpairdistance 
+        #pairs_under_cutoff[index] = np.asarray(np.where(chargedpairdistance<cut_off)).shape[1]
+    return charged_pair_distances
+
+def wrapper_unique_pairs(simname):
+    ps = compute.find_pairs_unique(simname)
+    cpd = find_tracked_pairs_unique(ps,simname)
+    return cpd
+
+def autcorrelation_lifetime_correlation(simname,cutoff):
+    ps = compute.find_pairs_unique(simname)
+    cpd = find_tracked_pairs_unique(ps, simname)
+    pairs_under_cutoff=np.zeros(len(cpd.keys()))
+    for index,element in enumerate(cpd):
+        pairs_under_cutoff[index] = np.asarray(np.where(cpd[element]<cutoff)).shape[1]
+    for index, element in enumerate(pairs_under_cutoff):
+        pairs_under_cutoff[index]=pairs_under_cutoff[0]*pairs_under_cutoff[index]
+    return pairs_under_cutoff
 
 def set_strain_props(ax):
     """Set properties for strain (x-axis) for the given axis object"""
@@ -71,22 +127,25 @@ def set_strain_props(ax):
     ax.set_xticklabels(ax.get_yticks(),{'family':'serif','size':14})
     ax.set_xlabel('Strain',fontProperties)
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
+    ax.tick_params(direction='in')
     return ax
 
 def set_y_props(ax,label):
     """"Set properties for y-axis with the given name"""
     fontProperties = {'family':'serif','size':20}
-    ax.set_yticklabels(ax.get_yticks(),{'family':'serif','size':14})
+    ax.set_yticklabels(ax.get_yticks(),{'family':'serif','size':16})
     ax.yaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.set_ylabel(label,fontProperties)
+    ax.tick_params(direction='in')
     return ax
 
 def set_x_props(ax,label):
     """"Set properties for y-axis with the given name"""
     fontProperties = {'family':'serif','size':20}
-    ax.set_xticklabels(ax.get_xticks(),{'family':'serif','size':14})
+    ax.set_xticklabels(ax.get_xticks(),{'family':'serif','size':16})
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.set_xlabel(label,fontProperties)
+    ax.tick_params(direction='in')
     return ax
 
 def plot_cutoff_pairs(distances,*args,save=False,dotsperinch=300):
@@ -165,80 +224,114 @@ def specific_cutoff_pairs(distances,dist_vec,cut_off,
             + str(cut_off)
         fig1.savefig(saveloc,dpi=300)
 
-def plot_charged_compars(*args,cut_off=2,pngname='plot_charged_compars',save=False,dotsperinch=300):
+def plot_charged_compars(*args,cut_off=2,pngname='plot_charged_compars',save=False,
+labels,dotsperinch=300,normalized=True,deformation_strain_end=1.72002,plot_strain_end=1.0):
     """ Similar to specific_cutoff_pairs for multiple simulations"""
     distances=args[0]
-    strain=np.linspace(0,1.71,len(distances.keys()))
-    fig1=plt.figure(figsize=(8,6),dpi=150)
+    strain=np.linspace(0,deformation_strain_end,len(distances.keys())-1)
+    fig1=plt.figure(figsize=(8,8),dpi=150)
     ax=plt.gca()
     index_out=0
-    ax=set_strain_props(ax)
+    ax=set_x_props(ax,'Strain')
+    ax.set_xlim(0,plot_strain_end)
     ax=set_y_props(ax,'Number of pairs')
-    c=['C3','C0']
+    c=['#1f77b4','#ff7f0e','#2ca02c','#d62728']
+    colornames=['red','blue','green','yellow']
     while index_out<len(args):
         distances=args[index_out]
-        prop_constant=args[index_out+1]
-        dist_vec=args[index_out+2]
-        num_of_pairs_tracked = find_tracked_pairs(distances,cut_off)
-        num_of_pairs_hypothetical=find_hypothetical_pairs(dist_vec,distances,
-                                                          prop_constant,
-                                                          cut_off)
-        num_of_pairs_cumulative = find_cumulative_pairs(distances,cut_off)
-        ax.plot(strain,num_of_pairs_tracked,'-',color=c[index_out//3])
-        ax.plot(strain,num_of_pairs_cumulative,'--',color = c[index_out//3])
-        ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out//3])
-        index_out+=3
-    red_patch = mpatches.Patch(color='C3',label = 'v20')
-    green_patch = mpatches.Patch(color='C0',label = 'v20 (last stage efield')
-    first_legend = plt.legend(handles=[red_patch,green_patch],loc='lower left')
+        #prop_constant=args[index_out+1]
+        #dist_vec=args[index_out+2]
+        if normalized:
+            num_of_pairs_tracked = find_tracked_pairs(distances,cut_off)
+            #num_of_pairs_hypothetical=find_hypothetical_pairs(dist_vec,distances,
+            #                                                prop_constant,
+            #                                                cut_off)
+            num_of_pairs_cumulative = find_cumulative_pairs(distances,cut_off)
+            ax.plot(strain,num_of_pairs_tracked,'-',color=c[index_out//3])
+            ax.plot(strain,num_of_pairs_cumulative,'--',color = c[index_out//3])
+            #ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out//3])
+        else:
+            num_of_pairs_tracked = find_tracked_pairs(distances,cut_off,normalized=False)
+            #num_of_pairs_hypothetical=find_hypothetical_pairs(dist_vec,distances,
+            #                                                prop_constant,
+            #                                                cut_off,
+            #                                               normalized=False)
+            num_of_pairs_cumulative = find_cumulative_pairs(distances,cut_off,
+            normalized=False)
+            ax.plot(strain,num_of_pairs_tracked[1:],'-',color=c[index_out//3])
+            ax.plot(strain,num_of_pairs_cumulative[1:],'--',color = c[index_out//3])
+            #ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out//3])
+        index_out+=1
+    patches={}
+    for index in range(len(labels)):
+        patches[index] = mpatches.Patch(color=c[index],label = labels[index])
+    first_legend = plt.legend(handles=[patches[0],patches[1],patches[2],patches[3]],loc='lower left')
     axl = plt.gca().add_artist(first_legend)
     custom_lines = [Line2D([0], [0], color='k', lw=1),
                 Line2D([0], [0], color='k', linestyle='--',lw=1),
                 Line2D([0], [0], color='k', linestyle = ':',lw=1)]
-    ax.legend(custom_lines,['Tracked','Cumulative','Hypothetical'])
-    title = "Cut off = " + str(cut_off)
-    ax.set_title(title,fontsize=20,fontfamily='Serif')
+    ax.legend(custom_lines,['Tracked','Cumulative'],loc='lower right')
+    title = "Cut off = " + str(cut_off)[:4]
+    #ax.set_title(title,fontsize=20,fontfamily='Serif')
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Perpendicular electric field',
+        'Electric field = 1.2'))
+    #ax.text(0.03,0.08,textstr, transform=ax.transAxes, fontsize=14,verticalalignment='top', bbox=props)
     if save:
-        fname = fileIO.default_path + pngname + '_comparison_charged_cutoff_' + str(cut_off) +'.png'
+        plt.tight_layout()
+        fname = imagesavepath + pngname + '_comparison_charged_cutoff_' + str(cut_off)[:4] +'.png'
         fig1.savefig(fname,dpi=dotsperinch)
 
-def plot_charged_compars_2(cut_off,*args,save=False,dotsperinch=300):
+def plot_tracked_pairs(*args,cut_off=2,pngname='tracked-pairs_',save=False,
+labels,dotsperinch=300,deformation_strain_end=1.72002,plot_strain_end=1.0):
     """ Similar to specific_cutoff_pairs for multiple simulations"""
     distances=args[0]
-    strain=np.arange(0,len(distances.keys())/100,0.01)
-    fig1=plt.figure(figsize=(8,6),dpi=150)
-    ax=plt.gca()
+    strain=np.linspace(0,deformation_strain_end,len(distances.keys()))
+    fig1=plt.figure(figsize=(8,8),dpi=150)
+    ax=fig1.add_subplot(1,1,1)
     index_out=0
-    ax=set_strain_props(ax)
-    ax=set_y_props(ax,'Number of pairs')
-    c=['C3','g','C0']
+    ax=set_x_props(ax,'Strain')
+    ax.set_xlim(0,plot_strain_end)
+    ax=set_y_props(ax,'Number of tracked pairs')
     while index_out<len(args):
         distances=args[index_out]
-        dist_vec=args[index_out+1]
-        num_of_pairs_tracked = find_tracked_pairs(distances,cut_off)
-        num_of_pairs_hypothetical= dist_vec
-        num_of_pairs_cumulative = find_cumulative_pairs(distances,cut_off)
-        ax.plot(strain,num_of_pairs_tracked,'-',color=c[index_out])
-        ax.plot(strain,num_of_pairs_cumulative,'--',color = c[index_out])
-        ax.plot(strain,num_of_pairs_hypothetical,':',color=c[index_out])
-        index_out+=2
-    red_patch = mpatches.Patch(color='C3',label = '0.05 V/A')
-    green_patch = mpatches.Patch(color='C0',label = '0.00 V/A')
-    first_legend = plt.legend(handles=[red_patch,green_patch])
-    axl = plt.gca().add_artist(first_legend)
-    custom_lines = [Line2D([0], [0], color='k', lw=1),
-                Line2D([0], [0], color='k', linestyle='--',lw=1),
-                Line2D([0], [0], color='k', linestyle = ':',lw=1)]
-    ax.legend(custom_lines,['Tracked','Cumulative','Hypothetical'])
+        num_of_pairs_tracked = find_tracked_pairs(distances,cut_off,normalized=False)
+        ax.plot(strain,num_of_pairs_tracked,label=labels[index_out])
+        index_out+=1
+    ax.legend(fontsize=16)
     title = "Cut off = " + str(cut_off)
     ax.set_title(title,fontsize=20,fontfamily='Serif')
-    plt.show()
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    plt.tight_layout()
     if save:
-        fname = fileIO.default_path + '_comparison_charged_' + str(cut_off) + '.png'
+        fname = imagesavepath + pngname + '_comparison_charged_cutoff_' + str(cut_off) +'.png'
         fig1.savefig(fname,dpi=dotsperinch)
 
-def understand_variation(*args,smoothed=False,save=False,msd=False,
-    strain_end=1.718,units='lj'):
+def plot_unique_tracked_pairs(*args,cut_off=2,pngname='tracked-pairs_',save=False,
+labels,dotsperinch=300,deformation_strain_end=1.72002,plot_strain_end=1.0):
+    """ Similar to specific_cutoff_pairs for multiple simulations"""
+    fig1=plt.figure(figsize=(8,8),dpi=150)
+    strain = np.linspace(0,deformation_strain_end,)
+
+    ax=fig1.add_subplot(1,1,1)
+    index_out=0
+    while index_out<len(args):
+        matched_pairs = compute.find_pairs_unique(args[0])
+        pairs_under_cutoff = compute.find_tracked_pairs_unique(matched_pairs,args[0],cut_off=cut_off)
+        ax.plot(strain,pairs_under_cutoff,label=labels[index_out])
+        index_out+=1
+    ax=set_x_props(ax,'Strain')
+    ax.set_xlim(0,plot_strain_end)
+    ax=set_y_props(ax,'Number of tracked pairs')
+    ax.legend(fontsize=16)
+    if save:
+        fname = imagesavepath + pngname + '_comparison_charged_cutoff_' + str(cut_off) +'.png'
+        fig1.savefig(fname,dpi=dotsperinch)
+
+
+def understand_variation(*args,labels,smoothed=False,save=False,msd=False,
+    deformation_strain_end=1.72002,plot_strain_end=1.0,units='lj'):
     """
     Plot data for repeats of same simulation to understand intra-model
     variation.
@@ -257,7 +350,7 @@ def understand_variation(*args,smoothed=False,save=False,msd=False,
                                       np.std(df1[:,3])]))
         plt.figure(1)
         till = len(df1[:,deformation_along+1])
-        strain=np.linspace(0,strain_end,till)
+        strain=np.linspace(0,deformation_strain_end,till)
         if smoothed:
             if units=='real':
                 y_noise = df1[:till,deformation_along+1]*1000
@@ -276,7 +369,7 @@ def understand_variation(*args,smoothed=False,save=False,msd=False,
                      linewidth=2,label=arg)
             elif units=='lj':
                 plt.plot(strain[:till],df1[:till,deformation_along+1],
-                     linewidth=2,label=arg)
+                     linewidth=2,label=labels[index])
         if msd:
             plt.figure(2)
             ax2=plt.gca()
@@ -294,7 +387,7 @@ def understand_variation(*args,smoothed=False,save=False,msd=False,
         #plt.plot(strain,df2[:,35],label=arg)
     plt.figure(1)
     plt.xlabel('Strain',fontsize=20,fontfamily='serif')
-   
+
     if units=='real':
         plt.ylabel('Stress (MPa)',fontsize=20,fontfamily='serif')
     elif units=='lj':
@@ -304,7 +397,8 @@ def understand_variation(*args,smoothed=False,save=False,msd=False,
     fontProperties = {'family':'serif','size':16}
     ax.set_yticklabels(ax.get_yticks(), fontProperties)
     plt.gca().yaxis.set_major_formatter(FormatStrFormatter('%g'))
-    plt.legend()
+    plt.legend(fontsize=16)
+    ax.set_xlim(0,plot_strain_end)
     plt.tight_layout()
     if msd:
         ax2=set_strain_props(ax2)
@@ -327,45 +421,107 @@ def understand_variation(*args,smoothed=False,save=False,msd=False,
             print(fname)
             fig1.savefig(fname,dpi=300)
 
-def plot_multiple_numpy(*args,smoothed=False):
+def return_mean_stress(*args):
+    """Read stress for the each of the given files and return the mean stress.
+    Typically used for finding out the mean stress for a deformation of
+    the same system along different directions or at different equilibration
+    times.
+
+    Args:
+    *args (str): file name for the deformation.
+
+    Returns:
+    m_stress (list): a list containing the mean stress for the given deformations.
+    """
+    df1,df2=extract.extract_def(args[0])
+    m_stress=np.zeros((df1.shape[0],len(args)))
+    for index, arg in enumerate(args):
+        df1,df2=extract.extract_def(arg)
+        df1=df1.values
+        df2=df2.values
+        deformation_along = np.argmax(np.array([np.std(df1[:,1]),
+                                      np.std(df1[:,2]),
+                                      np.std(df1[:,3])]))
+        m_stress[:,index]=df1[:,deformation_along+1]
+    m_stress = np.mean(m_stress,axis=1)
+    return m_stress
+
+def return_mean_temperature(*args):
+    """Read temperature for the each of the given files and return the mean temperature.
+    Typically used for finding out the mean temperature for a deformation of
+    the same system along different directions or at different equilibration
+    times.
+
+    Args:
+    *args (str): file name for the deformation.
+
+    Returns:
+    m_temperature (list): a list containing the mean stress for the given deformations.
+    """
+    df1,df2=extract.extract_def(args[0])
+    m_temperature=np.zeros((df1.shape[0],len(args)))
+    for index, arg in enumerate(args):
+        df1,df2=extract.extract_def(arg)
+        df1=df1.values
+        df2=df2.values
+        m_temperature[:,index]=df1[:,7]
+    m_temperature = np.mean(m_temperature,axis=1)
+    return m_temperature
+
+def plot_mean_quantities(*args,ylabel,labels,title,
+deformation_strain_end=1.72002,plot_strain_end=1.0,
+save=False):
+    """Plot mean quantities """
+    fig = plt.figure(figsize=(8,8),dpi=150)
+    ax=fig.add_subplot(1,1,1)
+    strain=np.linspace(0,deformation_strain_end,len(args[0]))
+    for index, arg in enumerate(args):
+        ax.plot(strain,arg,label=labels[index])
+    ax.legend(fontsize=16)
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, ylabel)
+    #ax.set_ylabel(ylabel,fontsize=14)
+    #ax.set_xlabel('Strain',fontsize=14)
+    ax.set_xlim(0,plot_strain_end)
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Perpendicular electric field',
+        'Electric field = 1.2'))
+    #ax.text(0.07, 0.70, textstr, transform=ax.transAxes, fontsize=14,verticalalignment='top', bbox=props)
+    if save:
+        plt.tight_layout()
+        full_path = imagesavepath + title + '.png'
+        plt.savefig(full_path,dpi=300,bbox_inches='tight')
+
+def plot_multiple_numpy(*args, labels, deformation_strain_end=1.72002, 
+    plot_strain_end=1.0,save=False):
     """Plot graphs for given arguments
     
     Args:
     *args (str): numpy arrays for each separate simulation containing the
     def 1 file information"""
     fig1=plt.figure(figsize=[8,8],dpi=150)        
-    plt.figure(1)
-    strain=np.arange(0,1.718,0.001)
-    labels=['1000 DP','2000 DP','3000 DP']
+    ax = fig1.add_subplot(1,1,1)
+    strain=np.linspace(0.00016345,deformation_strain_end,len(args[0]))
     till = len(strain)
     for index,arg in enumerate(args):
-        deformation_along = np.argmax(np.array([np.std(arg[:,1]),np.std(arg[:,2]),np.std(arg[:,3])]))
-        if smoothed:
-            y_noise = arg[:till,deformation_along+1]*1000
-            y=signal.savgol_filter(y_noise,
-                                   357, # window size used for filtering
-                                   1,
-                                   mode='nearest') # order of fitted polynomial
-            y=np.asarray(y)
-            plt.plot(strain[:till],y.T,linewidth=2,label=labels[index])
-            
-        else:
-            plt.plot(strain[:till],arg[:till,deformation_along+1]*1000,linewidth=2,label=labels[index])
-    plt.xlabel('Strain',fontsize=20,fontfamily='serif')
-    plt.legend()
-    plt.ylabel('Stress (MPa)',fontsize=20,fontfamily='serif')
-    ax=plt.gca()
-    ax=set_strain_props(ax)
+        ax.plot(strain,arg,linewidth=2,label=labels[index])
+    ax.set_xlim(0,plot_strain_end)
+    ax.set_ylim(bottom=0)
+    ax=set_x_props(ax,'Strain')
+    ax=set_y_props(ax,'Stress')
     ax.legend(prop=dict(size=16))
-    fontProperties = {'family':'serif','size':16}
-    ax.set_yticklabels(ax.get_yticks(), fontProperties)
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Perpendicular electric field',
+        'Electric field = 1.2'))
+    #ax.text(0.05, 0.65, textstr, transform=ax.transAxes, fontsize=14,
+    #verticalalignment='top', bbox=props)
     plt.tight_layout()
-    fname = str(labels)
-    fname = fname.replace(',', '').replace('\'','').replace(' ','').strip('[]\'')
-    full_path = imagesavepath + fname
-    if smoothed:
-        plt.savefig(full_path+'_smoothed.png',dpi=300)
-    else:
+    if save:
+        fname = str(labels)
+        fname = fname.replace(',', '').replace('\'','').replace(' ','').strip('[]\'')
+        full_path = imagesavepath + fname
         plt.savefig(full_path+'.png',dpi=300)
 
 def structure_factor_plotting(k,sk,simname,save,style):
@@ -384,23 +540,25 @@ def structure_factor_plotting(k,sk,simname,save,style):
     if save:
         plt.savefig(figname,dpi=300)
 
-def radial_distribution_function_plotting(g,r,simname,save,style):
+def radial_distribution_function_plotting(*args,labels,figname,save=False):
     """Plotting the radial distribution function"""
-    if style=='matplotlib':
-        mpl.style.use('default')
-    elif style == 'sns':
-        sns.set()
-    fig = plt.figure(figsize=(8,6))
-    ax = plt.gca()
-    ax.plot(r,g,linewidth=1) #Plot rdf and set chart properties
-    set_y_props(ax,'$g(r)$')
-    set_x_props(ax,'$r$')
-    figname=simname+'_rdf.png'
+    fig = plt.figure(figsize=(8,6),dpi=100)
+    ax = fig.add_subplot(1,1,1)
+    rdf_dict={}
+    for simfile in args:
+        rdf_dict[simfile] = pd.read_csv(simfile,delim_whitespace=True)
+    for index,simfile in enumerate(args):
+        ax.plot(rdf_dict[simfile].iloc[:,0],rdf_dict[simfile].iloc[:,1],label=labels[index]) #Plot rdf and set chart properties
+    ax = set_y_props(ax,'$g(r)$')
+    ax = set_x_props(ax,'$r$')
+    ax.set_xlim(0,3)
+    ax.set_ylim(0,10)
+    ax.legend(fontsize=13)
     title='Radial Distribution Function'
-    ax.set_title(title,fontsize=20,fontfamily='Serif')
+    #ax.set_title(title,fontsize=20,fontfamily='Serif')
     if save:
         plt.savefig(figname,dpi=300)
-    
+
 def plot_standard_analysis(simname, nfiles, start=1000,save=False, style='matplotlib'):
     """
     Plot all the variables extracted integrate.standard_analysis
@@ -461,7 +619,6 @@ def plot_chain_orientation_parameter(simname, nc, dp, nfiles,
         full_path = imagesavepath + curr_name
         plt.savefig(full_path, dpi=100)
 
-
 def energy_evolution_single(simname, save=False):
     """
     Find out energy evolution during the deformation of the given simulation.
@@ -493,7 +650,6 @@ def energy_evolution_single(simname, save=False):
         curr_name = simname + '_energy_evolution_deformation.png'
         full_path = imagesavepath + curr_name
         plt.savefig(full_path)
-
 
 def energy_evolution_comparison(simname, ids, save = False):
     """
@@ -532,6 +688,125 @@ def energy_evolution_comparison(simname, ids, save = False):
         plt.tight_layout()
         plt.savefig(full_path)
     
-    
-    
+def density_evolution(*args,labels,title,save=False):
+    """Plot density for the given simnames"""
+    fig=plt.figure(figsize=(8,8),dpi=150)
+    ax=fig.add_subplot(1,1,1)
+    df1, df2 = extract.extract_def(args[0])
+    strain=np.linspace(0,1.718,df1.shape[0])
+    for index, filename in enumerate(args):
+        df1, df2 = extract.extract_def(filename)
+        ax.plot(strain, df1.iloc[:,17],label=labels[index],linewidth=2)
+    ax.legend(fontsize=16)
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, 'Density')
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Parallel electric field',
+        'Electric field = 1.2'))
+    ax.text(0.30, 0.30, textstr, transform=ax.transAxes, fontsize=14,
+    verticalalignment='top', bbox=props)
+    ax.set_xlim(0,1.71)
+    if save:
+        plt.tight_layout()
+        full_path = imagesavepath + 'density-' +title + '.png'
+        plt.savefig(full_path,dpi=300)
 
+def ngp_evolution(*args,labels,title,save=False):
+    """Plot NGP for the given simnames"""
+    fig=plt.figure(figsize=(8,8),dpi=150)
+    ax=fig.add_subplot(1,1,1)
+    df1, df2 = extract.extract_def(args[0])
+    strain=np.linspace(0,1.718,df1.shape[0])
+    for index, filename in enumerate(args):
+        df1, df2 = extract.extract_def(filename)
+        ax.plot(strain, df2.iloc[:,35],label=labels[index],linewidth=2)
+    ax.legend(fontsize=16)
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, 'NGP')
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Parallel electric field',
+        'Electric field = 1.2'))
+    ax.text(0.40, 0.30, textstr, transform=ax.transAxes, fontsize=14,
+    verticalalignment='top', bbox=props)
+    ax.set_xlim(0,1.71)
+    if save:
+        plt.tight_layout()
+        full_path = imagesavepath + 'ngp-'+ title + '.png'
+        plt.savefig(full_path,dpi=300)
+    
+def msd_evolution(*args,labels,title,save=False):
+    """Plot MSD for the given simnames"""
+    fig=plt.figure(figsize=(8,8),dpi=150)
+    ax=fig.add_subplot(1,1,1)
+    df1, df2 = extract.extract_def(args[0])
+    strain=np.linspace(0,1.718,df1.shape[0])
+    for index, filename in enumerate(args):
+        df1, df2 = extract.extract_def(filename)
+        ax.plot(strain, df2.iloc[:,32],label=labels[index],linewidth=2)
+    ax.legend(fontsize=16)
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, 'MSD')
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Parallel electric field',
+        'Electric field = 1.2'))
+    ax.text(0.40, 0.60, textstr, transform=ax.transAxes, fontsize=14,
+    verticalalignment='top', bbox=props)
+    ax.set_xlim(0,1.71)
+    if save:
+        plt.tight_layout()
+        full_path = imagesavepath + 'msd-'+ title + '.png'
+        plt.savefig(full_path,dpi=300)
+    
+def temperature_evolution(*args,labels,title,save=False):
+    """Plot MSD for the given simnames"""
+    fig=plt.figure(figsize=(8,8),dpi=150)
+    ax=fig.add_subplot(1,1,1)
+    df1, df2 = extract.extract_def(args[0])
+    strain=np.linspace(0,1.718,df1.shape[0])
+    for index, filename in enumerate(args):
+        df1, df2 = extract.extract_def(filename)
+        ax.plot(strain, df1.iloc[:,7],label=labels[index],linewidth=2)
+    ax.legend(fontsize=16)
+    ax = set_x_props(ax, 'Strain')
+    ax = set_y_props(ax, 'Temperature')
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
+    textstr = '\n'.join((
+        'Parallel electric field',
+        'Electric field = 1.2'))
+    ax.text(0.40, 0.70, textstr, transform=ax.transAxes, fontsize=14,
+    verticalalignment='top', bbox=props)
+    ax.set_xlim(0,1.71)
+    if save:
+        plt.tight_layout()
+        full_path = imagesavepath + 'temperature-'+ title + '.png'
+        plt.savefig(full_path,dpi=300)
+
+def energy_all_evolution(*args,labels,title,save=False):
+    """Plot energy for the given simnames"""
+    energy=[9,12,13,14]
+    ene_label=['Bonded-energy','Ecoul','Van-der-Waal','Total']
+    df1, df2 = extract.extract_def(args[0])
+    strain=np.linspace(0,1.718,df1.shape[0])
+    label_fname=''
+    for element in labels:
+        label_fname+=element
+    for i in range(4):
+        fig=plt.figure(figsize=(8,8),dpi=150)
+        ax=fig.add_subplot(1,1,1)
+        for index, filename in enumerate(args):
+            df1, df2 = extract.extract_def(filename)
+            ene_temp=(df1.iloc[:,energy[i]] - df1.iloc[0,energy[i]]).values
+            ax.plot(strain, ene_temp,label=labels[index],linewidth=2)
+        ax.legend(fontsize=16)
+        ax.set_title(title,fontsize=20)
+        ax = set_x_props(ax, 'Strain')
+        ax = set_y_props(ax, ene_label[i])
+        ax.set_xlim(0,1.71)
+        if save:
+            plt.tight_layout()
+            full_path = imagesavepath + 'v20/energy_during_deformation/32C_128DP_energy_' +str(ene_label[i])+label_fname+ '.png'
+            plt.savefig(full_path,dpi=300)
+    
