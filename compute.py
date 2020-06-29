@@ -37,7 +37,7 @@ def periodic_distance(x,y,z,x2,y2,z2,sidehx,sidehy,sidehz,bs):
     
 def cluster_analysis(simname,cutoff,coords_loc=[3,6]):
     """Read a LAMMPS trajectory (extract_unwrapped) based on the given filename 
-    (first timestep/snapshot only) and return number of clusters and size
+    (first timestep/snapshot only) and returns the number of clusters and size
     of clusters at the first snapshot. Very slow -- might take couple of hours
     depending on size of the system.
     Args:
@@ -48,6 +48,8 @@ def cluster_analysis(simname,cutoff,coords_loc=[3,6]):
     Returns:
     cluster (dict): A dictionary that contains clusters as keys and list of 
     atomIDs in that specific cluster as values.
+
+    Reference: No reference.
     """
     coord, bs=coord,bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
     current_timestep = coord['timestep_0']
@@ -58,6 +60,7 @@ def cluster_analysis(simname,cutoff,coords_loc=[3,6]):
     sidehx = bs[0]/2
     sidehy = bs[1]/2
     sidehz = bs[2]/2
+    ## Find distances between positive and negative charges
     for pindex, pcharge in enumerate(type2):
         for nindex, ncharge in enumerate(type3):
             distsn = periodic_distance(pcharge[3],pcharge[4],pcharge[5],
@@ -128,6 +131,8 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
     Returns:
     cluster (dict): A dictionary that contains clusters as keys and list of 
     atomIDs in that specific cluster as values. 
+
+    Reference: No reference.
     """
     coord, bs=coord,bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
     current_timestep = coord['timestep_0']
@@ -142,6 +147,7 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
     charge_distances=np.zeros((type2.shape[0],type3.shape[0]))
     map_patomids={}
     map_natomids={}
+    ### Find distances between positive and negative charges.
     for pindex, pcharge in enumerate(type2):
         map_patomids[pindex] = pcharge[0]
         for nindex, ncharge in enumerate(type3):
@@ -151,9 +157,10 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
                               sidehx,sidehy,sidehz,bs)
     index_distances={}
     cluster={}
+    ### Find the indices where the distances are less than cutoff.
     for index,row in enumerate(charge_distances):
         index_distances[index] = np.where(row<cutoff)
-    
+    ### Make clusters for the indices and atomIDs to those clusters
     for key in index_distances:
         cluster[key]=[]
         for element in index_distances[key][0]:
@@ -164,17 +171,12 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
                     if element==inner_element and key!=inner_key:
                         cluster[key].append(map_patomids[inner_key])
                         cluster[key].append(map_natomids[inner_element])
-    
+    ### Remove duplicate atomids in each row and sort them.
     for key in cluster:
         cluster[key]=np.unique(cluster[key])
-    # for key in cluster:
-    #     #cluster[key]=np.unique(cluster[key])
-    #     for inner_key in cluster:
-    #         cluster[key]=np.unique(cluster[key])
-    #         ln=min(len(cluster[key]),len(cluster[inner_key]))
-    #         if np.any(cluster[key][:ln]==cluster[inner_key][:ln]) and key!=inner_key:
-    #             cluster[key]=np.append(cluster[key],cluster[inner_key])
     random_cals=0
+    ### Make random calls to two indices of the clusters and check if they have
+    ### any atomid in common. If they do, merge the clusters and delete one of them.
     cluster_keys_set=list(range(0,len(cluster)))
     not_steady_set=True
     while not_steady_set:
@@ -203,29 +205,75 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
                 pass
         except:
             pass
+    ### Remove duplicates in same row and sort
     for key in cluster:
         cluster[key]=np.unique(cluster[key])
+    ### Find the mean size of the cluster and print it on the console.
     cluster_copy=cluster.copy()
     mean_size=0
-    
-    # for index in range(len(cluster)):
-    #     for inner_index in range(index+1,len(cluster)):
-    #         if cluster[index][0]==cluster[inner_index][0] and index!=inner_index:
-    #             try:
-    #                 print('del')
-    #                 del cluster_copy[inner_index]
-    #             except:
-    #                 pass
-    
     for key in cluster_copy:
         mean_size+=len(cluster_copy[key])
     print(mean_size/len(cluster_copy))
     return cluster_copy
 
+def asphericity_parameter(cluster,simname,coords_loc=[3,6]):
+    """Compute the asphericity parameter of a given cluster. Eigenvalues of the
+    gyration tensor are used to compute the shape parameter.
+
+    Args:
+    cluster (dict): A dictionary containing isolated clusters (atomids) as values
+    simname (str): Name of the simulation
+
+    Returns:
+    A_s (list): List containing asphericity parameter of each of the clusters passed
+    through the cluster dictionary
+
+    Reference: 
+    1. Arkın, H., & Janke, W. (2013). Gyration tensor based analysis of the shapes of 
+    polymer chains in an attractive spherical cage. The Journal of chemical 
+    physics, 138(5), 054904. 
+    https://aip.scitation.org/doi/abs/10.1063/1.4788616?journalCode=jcp
+    2. Ma, B., Nguyen, T. D., & Olvera de la Cruz, M. (2019). Control of Ionic Mobility
+    via Charge Size Asymmetry in Random Ionomers. Nano letters, 20(1), 43-49.
+    https://pubs.acs.org/doi/abs/10.1021/acs.nanolett.9b02743
+    """
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    coord=coord['timestep_0']
+    sidehx = bs[0]/2
+    sidehy = bs[1]/2
+    sidehz = bs[2]/2
+    all_gyration_tensors={}
+    A_s={}
+    for index, key in enumerate(cluster):
+        all_gyration_tensors[index]=np.zeros((3,3))
+        curr_matrix=np.zeros((len(cluster[key]),3))
+        ### Find x, y, z coordinates of beads based on ids present in the cluster
+        for inner_index, atomid in enumerate(cluster[key]):
+            curr_matrix[inner_index] = coord[coord['id']==atomid].iloc[:,coords_loc[0]:coords_loc[1]].values
+        xcom,ycom,zcom=np.mean(curr_matrix,axis=0) #Find the center of mass of the cluster
+        ### Find the gyration tensor of the cluster and compute its eigenvalues and use the eigenvalues
+        ### to compute the asphericity parameter. 
+        for element in curr_matrix:
+            all_gyration_tensors[index][0,0]+=(element[0]-xcom)**2
+            all_gyration_tensors[index][0,1]+=(element[0]-xcom)*(element[1]-ycom)
+            all_gyration_tensors[index][0,2]+=(element[0]-xcom)*(element[2]-zcom)
+            all_gyration_tensors[index][1,0]+=(element[0]-xcom)*(element[1]-ycom)
+            all_gyration_tensors[index][1,1]+=(element[1]-ycom)**2
+            all_gyration_tensors[index][1,2]+=(element[1]-ycom)*(element[2]-zcom)
+            all_gyration_tensors[index][2,0]+=(element[0]-xcom)*(element[2]-zcom)
+            all_gyration_tensors[index][2,1]+=(element[1]-ycom)*(element[2]-zcom)
+            all_gyration_tensors[index][2,2]+=(element[2]-zcom)**2
+        all_gyration_tensors[index]=all_gyration_tensors[index]/len(cluster[key])
+        w, v = np.linalg.eig(all_gyration_tensors[index])
+        A_s[index]= ((w[0] - w[1])**2 + (w[1]-w[2])**2 + (w[2]-w[0])**2)/(2*(w[0]**2 +w[1]**2+w[2]**2))
+    return list(A_s.values())
+
 def find_pairs(simname,coords_loc=[3,6]):
     """Reads a filename and  returns a dictionary with timesteps as keys
     and the distances between positive and negative beads as values at that
-    timestep. Uniqueness in pairs is not maintained.
+    timestep. Uniqueness in pairs is not maintained (This is the old script
+    that was the first step for computing the tracked, cumulative and hypothetical
+    charge pairs).
 
     Args:
     simname (str): filename of the simulation
@@ -237,6 +285,8 @@ def find_pairs(simname,coords_loc=[3,6]):
     distances_vec (dict): A dictionary with timesteps as keys and the distances
         between positive and negative beads (vector) as values at that timestep as 
         a pandas dataframe. 
+
+    Reference: No reference.
     """
     distances={}
     dist_vec={}
@@ -260,6 +310,26 @@ def find_pairs(simname,coords_loc=[3,6]):
     return distances,dist_vec
 
 def find_pairs_unique(simname,coords_loc=[3,6]):
+    """Compute the distance between positive and negative charges. Makes
+    sure that uniqueness of pairs is maintained. If a bead/atom is chosen as
+    part of a pair, then it is subsequently removed from future searches for
+    oppositely charged beads. A pair is deemed a pair if the nearest neighbour
+    condition is satisfies for both of the charges. Can be made faster with 
+    an array version.
+
+    Args:
+    simname (str): Filename of the simulation
+    coords_loc (list - default): Column indices of x coordinates and z coordinates.
+
+    Returns:
+    matched_pair (dict): Dictionary containing timesteps as keys and ids of charged
+    pairs and the distance between those pairs as values. 
+
+    Reference: Kind of similar to lifetime correlation function, but not the same.
+    1. Ma, B., Nguyen, T. D., & Olvera de la Cruz, M. (2019). Control of Ionic 
+    Mobility via Charge Size Asymmetry in Random Ionomers. Nano letters, 20(1), 43-49.
+    https://pubs.acs.org/doi/abs/10.1021/acs.nanolett.9b02743
+    """
     matched_pair={}
     coord,bs=extract.extract_unwrapped(simname,first_only=True,boxsize_whole=True)
     for key in coord:
@@ -337,6 +407,20 @@ def find_pairs_unique(simname,coords_loc=[3,6]):
     return matched_pair
     
 def find_decorrelation_pairs(simname,cutoff,coords_loc=[3,6]):
+    """Find out how many charges have an oppositely charged bead within 
+    the given cutoff. I am checking how many negative beads have positive
+    beads within the given cutoff. It doesn't matter how many oppositely 
+    charged beads are present within the given cutoff. It's a step function.
+    Either a bead is present, or it's not present.
+
+    Args: 
+    simname (str): Name of the simulation
+    cutoff (float): Cutoff to be considered for qualifying beads
+    
+    Returns:
+    correlation_fn_whole (list): List containing correlation pairs.
+    Reference: https://pubs.acs.org/doi/10.1021/acs.nanolett.9b02743?goto=supporting-info
+    """
     coord,bs=extract.extract_unwrapped(simname,boxsize_whole=True)
     correlation_fn_whole=np.zeros((len(coord.keys()),1))
     outer_index = 0
@@ -355,17 +439,9 @@ def find_decorrelation_pairs(simname,cutoff,coords_loc=[3,6]):
         sidehz=box_l[2]/2
         for nindex,ncharge in enumerate(type3):
             for pindex,pcharge in enumerate(type2):
-                dx = pcharge[0] - ncharge[0]
-                dy = pcharge[1] - ncharge[1]
-                dz = pcharge[2] - ncharge[2]
-                if (dx < -sidehx):   dx = dx + box_l[0]
-                if (dx > sidehx):    dx = dx - box_l[0]
-                if (dy < -sidehy):   dy = dy + box_l[1]
-                if (dy > sidehy):    dy = dy - box_l[1]
-                if (dz < -sidehz):   dz = dz + box_l[2]
-                if (dz > sidehz):    dz = dz - box_l[2]
-                distAB = [dx,dy,dz]
-                distsp[pindex] = np.linalg.norm(distAB)
+                distsp[pindex] = periodic_distance(pcharge[0],pcharge[1],pcharge[2],
+                                                   ncharge[0],ncharge[1],ncharge[2],
+                                                   sidehx,sidehy,sidehz,box_l)
             if np.asarray(np.where(distsp == 0)).shape[1]>0:
                 print('something wrong')
             if np.asarray(np.where(distsp<cutoff)).shape[1] > 0:
@@ -375,6 +451,18 @@ def find_decorrelation_pairs(simname,cutoff,coords_loc=[3,6]):
     return correlation_fn_whole
 
 def find_decorrelation_pairs_distances(simname,coords_loc=[3,6]):
+    """Find the distance between positive and negative beads at 
+    every snapshot. Do not use. Bad function. 
+
+    Args: 
+    simname (str): Name of the simulation.
+    
+    Returns:
+    all_distances (dict): A dictionary with timesteps as keys that contains
+    another dictionary which has indices of negative beads as keys that has 
+    a list of distances of all positive beads from that negative bead as the
+    value of the dictionary.
+    """
     coord,bs=extract.extract_unwrapped(simname,boxsize_whole=True)
     all_distances={}
     for key in coord:
@@ -393,17 +481,9 @@ def find_decorrelation_pairs_distances(simname,coords_loc=[3,6]):
         distance_from_this_ncharge={}
         for nindex,ncharge in enumerate(type3):
             for pindex,pcharge in enumerate(type2):
-                dx = pcharge[0] - ncharge[0]
-                dy = pcharge[1] - ncharge[1]
-                dz = pcharge[2] - ncharge[2]
-                if (dx < -sidehx):   dx = dx + box_l[0]
-                if (dx > sidehx):    dx = dx - box_l[0]
-                if (dy < -sidehy):   dy = dy + box_l[1]
-                if (dy > sidehy):    dy = dy - box_l[1]
-                if (dz < -sidehz):   dz = dz + box_l[2]
-                if (dz > sidehz):    dz = dz - box_l[2]
-                distAB = [dx,dy,dz]
-                distsp[pindex] = np.linalg.norm(distAB)
+                distsp[pindex] = periodic_distance(pcharge[0],pcharge[1],pcharge[2],
+                                                   ncharge[0],ncharge[1],ncharge[2],
+                                                   sidehx,sidehy,sidehz,box_l)
             distance_from_this_ncharge[nindex] = distsp
         all_distances[key] = distance_from_this_ncharge
     return all_distances
@@ -411,7 +491,9 @@ def find_decorrelation_pairs_distances(simname,coords_loc=[3,6]):
 def find_charged_pairs_center(coord,coords_loc=[3,6]):
     """Reads in a dictionary which contains timesteps as keys and atom 
     coordinates as values and returns a dictionary with timesteps as keys
-    and positions of centers of positive and negative beads.
+    and positions of centers of positive and negative beads. Writes a
+    file that can be directly read in VMD to view the centers of charged
+    pairs.
 
     Args:
     coords (dict):  dictionary with the number of timesteps as keys and 
@@ -1371,7 +1453,7 @@ def poisson_ratio(simname):
                                     np.std(df1[:,3])]))
     strain=df3[:,0]
     begin=0
-    till=8
+    till=91
     if (deformation_along + 1) == 1:
         transverse_1=5
         transverse_2=6
@@ -1382,13 +1464,18 @@ def poisson_ratio(simname):
         transverse_1=4
         transverse_2=5
     transverse_1_list=df1[begin:till,transverse_1]
+    print(transverse_1_list)
     transverse_2_list=df1[begin:till,transverse_2]
     transverse_1_list=(transverse_1_list - transverse_1_list[0])/transverse_1_list[0]
     transverse_2_list=(transverse_2_list - transverse_2_list[0])/transverse_2_list[0]
     strain_list=strain[begin:till]
+    print(strain_list)
+    print(transverse_1_list)
+    slope, intercept, r_value, p_value, std_err = stats.linregress(strain_list,transverse_1_list)
     poisson_1=-(transverse_1_list/strain_list)
     poisson_2=-(transverse_2_list/strain_list)
-    return poisson_1[7], poisson_2[7]
+    print(-slope)
+    return poisson_1[90], poisson_2[90]
 
 def poisson_ratio_with_error(*args):
     pr=[]
