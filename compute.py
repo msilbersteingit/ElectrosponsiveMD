@@ -51,7 +51,7 @@ def cluster_analysis(simname,cutoff,coords_loc=[3,6]):
 
     Reference: No reference.
     """
-    coord, bs=coord,bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
     current_timestep = coord['timestep_0']
     cluster_set = {}
     cluster_index=0
@@ -134,7 +134,7 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
 
     Reference: No reference.
     """
-    coord, bs=coord,bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
     current_timestep = coord['timestep_0']
     del coord
     cluster_set = {}
