@@ -129,7 +129,7 @@ def radius_of_gyration_squared_integrated(*args,mass=1,sidechain=False):
     rog_sq=[]
     rend_sq=[]
     for filename in args:
-        df_unwrap,bs=extract.extract_unwrapped(filename,boxsize_whole=True)
+        df_unwrap, bs = extract.extract_unwrapped(filename,format_spec =['id','mol','type','xu','yu','zu','ix','iy','iz'],boxsize_whole=True)
         rend_sq_curr,gauss_curr = compute.end_to_end_distance_squared(df_unwrap,bs, sidechain=sidechain)
         rog_sq_curr=compute.radius_of_gyration_squared(df_unwrap,mass)
         rog_sq=rog_sq+rog_sq_curr

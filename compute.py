@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.integrate.quadrature import simps
 from scipy import stats
 import random
+from shapely.geometry import Point, LineString
 
 from analib import fileIO
 from analib import extract
@@ -34,7 +35,248 @@ def periodic_distance(x,y,z,x2,y2,z2,sidehx,sidehy,sidehz,bs):
     distAB = [dx,dy,dz]
     dist_mag = np.linalg.norm(distAB)
     return dist_mag
+
+def periodic_distance_return_new_coords(x,y,z,x2,y2,z2,sidehx,sidehy,sidehz,bs):
+    """Find out new coordinates based on minimum image convention.
+    """
+    dx = x2 - x
+    dy = y2 - y
+    dz = z2 - z
+    if (dx < -sidehx):   x = x - bs[0]
+    if (dx > sidehx):    x = x + bs[0]
+    if (dy < -sidehy):   y = y - bs[1]
+    if (dy > sidehy):    y = y + bs[1]
+    if (dz < -sidehz):   z = z - bs[2]
+    if (dz > sidehz):    z = z + bs[2]
+    return [x, y, z]
     
+def get_new_coords(curr_coordinates, bs, box_images):
+    """Get new coordinates from current coordinates based on box size
+    and box_image.
+    """
+    for index, element in enumerate(curr_coordinates):
+        if box_images[index]==1:
+            curr_coordinates[index] = curr_coordinates[index]  + bs[index]
+        elif box_images[index]==-1:
+            curr_coordinates[index] = curr_coordinates[index] - bs[index]
+    return curr_coordinates
+
+def get_new_chain_coords(coord_curr,bs,coords_loc=[3,6]):
+    coord_curr_copy=coord_curr.copy()
+    sidehx=bs[0]/2
+    sidehy=bs[1]/2
+    sidehz=bs[2]/2
+    for index,element in enumerate(coord_curr.iterrows()):
+        if index!=127:
+            bead_1=coord_curr_copy.iloc[index,coords_loc[0]:coords_loc[1]].values
+            bead_2=coord_curr_copy.iloc[index+1,coords_loc[0]:coords_loc[1]].values
+            dist_beads=np.linalg.norm(bead_2-bead_1)
+            if dist_beads>1.5:
+                new_bead_2=periodic_distance_return_new_coords(bead_2[0],bead_2[1],bead_2[2],
+                    bead_1[0],bead_1[1],bead_1[2],
+                    sidehx,sidehy,sidehz,bs)
+                coord_curr_copy.iat[index+1,3]=new_bead_2[0]
+                coord_curr_copy.iat[index+1,4]=new_bead_2[1]
+                coord_curr_copy.iat[index+1,5]=new_bead_2[2]
+    return coord_curr_copy
+
+def get_bonds_atomids(topologyfilename):
+    path=fileIO.findInSubdirectory(topologyfilename)
+    df = pd.read_csv(path,header=None,index_col=False)
+    for index in range(len(df)):
+        if df.iloc[index].str.split()[0][0]=='Bonds':
+            df2 = df.iloc[index +1:index+32512+1]
+    df2 = df2[0].str.split('\t',4,expand=True)
+    num2str = lambda x : float(x) 
+    df2 = df2.applymap(num2str)
+    df2.columns=['bondid','bondtype','atom1id','atom2id']
+    return df2
+
+def get_new_chain_coords_forsidechainmodel(coord_curr,bs,bondids,coords_loc=[3,6]):
+    coord_curr_copy=coord_curr.copy()
+    sidehx=bs[0]/2
+    sidehy=bs[1]/2
+    sidehz=bs[2]/2
+    for index,element in enumerate(coord_curr.iterrows()):
+        if index<88:
+            bead_1=coord_curr_copy.iloc[index,coords_loc[0]:coords_loc[1]].values
+            bead_2=coord_curr_copy.iloc[index+1,coords_loc[0]:coords_loc[1]].values
+            dist_beads=np.linalg.norm(bead_2-bead_1)
+            if dist_beads>1.5:
+                new_bead_2=periodic_distance_return_new_coords(bead_2[0],bead_2[1],bead_2[2],
+                    bead_1[0],bead_1[1],bead_1[2],
+                    sidehx,sidehy,sidehz,bs)
+                coord_curr_copy.iat[index+1,3]=new_bead_2[0]
+                coord_curr_copy.iat[index+1,4]=new_bead_2[1]
+                coord_curr_copy.iat[index+1,5]=new_bead_2[2]
+        elif index>88:
+            if (index+1)%3==0:
+                sidechainbondindex = np.where(bondids['atom2id']==index+1)[0][0]
+                sidechainbondsite = int(bondids.iloc[sidechainbondindex][2])
+                bead_1=coord_curr_copy.iloc[sidechainbondsite,coords_loc[0]:coords_loc[1]].values
+                bead_2=coord_curr_copy.iloc[index,coords_loc[0]:coords_loc[1]].values
+                if np.linalg.norm(bead_2 -bead_1)>1.5:
+                    new_bead_2=periodic_distance_return_new_coords(bead_2[0],bead_2[1],bead_2[2],
+                    bead_1[0],bead_1[1],bead_1[2],
+                    sidehx,sidehy,sidehz,bs)
+                    coord_curr_copy.iat[index,3]=new_bead_2[0]
+                    coord_curr_copy.iat[index,4]=new_bead_2[1]
+                    coord_curr_copy.iat[index,5]=new_bead_2[2]
+            else:
+                bead_1=coord_curr_copy.iloc[index-1,coords_loc[0]:coords_loc[1]].values
+                bead_2=coord_curr_copy.iloc[index,coords_loc[0]:coords_loc[1]].values
+                dist_beads=np.linalg.norm(bead_2-bead_1)
+                if dist_beads>1.5:
+                    new_bead_2=periodic_distance_return_new_coords(bead_2[0],bead_2[1],bead_2[2],
+                    bead_1[0],bead_1[1],bead_1[2],
+                    sidehx,sidehy,sidehz,bs)
+                    coord_curr_copy.iat[index,3]=new_bead_2[0]
+                    coord_curr_copy.iat[index,4]=new_bead_2[1]
+                    coord_curr_copy.iat[index,5]=new_bead_2[2]
+    return coord_curr_copy
+
+def persistence_length_exp(simname,nc,coord_loc=[3,6]):
+    """Compute the persistence length of the first snapshot (from the
+    given trajectory). There are many ways to compute persistence length.
+    Here, a microscopic definition is used.
+    """     
+    coords, bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rms_bond_length=bonded_beads_distance(simname,root_mean_square=True)
+    outer_index=0
+    all_chains=list(coords['timestep_0'].mol.unique())
+    curr_cos=np.zeros((nc,63))
+    key='timestep_0'
+    for chain in all_chains:
+        persis_length_list =[]
+        coord_curr=coords[key][coords[key]['mol']==chain]
+        dp = len(coord_curr)
+        id_start=(dp)*(chain-1)+1
+        id_end = (chain)*(dp)
+        coord_curr_copy = get_new_chain_coords(coord_curr, bs)
+        H=id_start + int(dp/2) # half
+        r_n = coord_curr_copy[coord_curr_copy['id']==H].iloc[:,coord_loc[0]:coord_loc[1]].values
+        r_m = coord_curr_copy[coord_curr_copy['id']==H + 1].iloc[:,coord_loc[0]:coord_loc[1]].values
+        vec_b_nm = r_m - r_n
+        vec_b_nm=vec_b_nm[0]
+        sum_iter=int(dp/2)-1
+        for index in range(sum_iter):
+            left_index = H - index
+            right_index = H + index
+            r_flt = coord_curr_copy[coord_curr_copy['id']==left_index].iloc[:,coord_loc[0]:coord_loc[1]].values # first left term
+            r_slt = coord_curr_copy[coord_curr_copy['id']==left_index+1].iloc[:,coord_loc[0]:coord_loc[1]].values # second left term
+            b_left = r_slt - r_flt
+            r_frt = coord_curr_copy[coord_curr_copy['id']==right_index].iloc[:,coord_loc[0]:coord_loc[1]].values # first right term
+            r_srt = coord_curr_copy[coord_curr_copy['id']==right_index+1].iloc[:,coord_loc[0]:coord_loc[1]].values # second right term
+            b_right = r_srt - r_frt
+            b_left=b_left[0]
+            b_right=b_right[0]
+            cos_sim_left=np.dot(vec_b_nm,b_left)/(np.linalg.norm(vec_b_nm)*np.linalg.norm(b_left))
+            cos_sim_right=np.dot(vec_b_nm,b_right)/(np.linalg.norm(vec_b_nm)*np.linalg.norm(b_right))
+            curr_cos[int(chain)-1,index]=(cos_sim_left+cos_sim_right)/2
+    lp=np.mean(curr_cos,axis=0)
+    lp_list=np.zeros((63,1))
+    for index,element in enumerate(lp):
+        print(element)
+        lp_list[index]=(-index*rms_bond_length)/np.log(element)
+    return lp,lp_list
+
+def persistence_length(simname,topologyfilename,coord_loc=[3,6],sidechain=False):
+    """Compute the persistence length of the first snapshot (from the
+    given trajectory). There are many ways to compute persistence length.
+    Here, a microscopic definition is used.
+    """     
+    coords, bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    if sidechain:
+        rms_bond_length = bonded_beads_distance_whole_backbone(simname,root_mean_square=True)
+        bondids = get_bonds_atomids(topologyfilename)
+    else:
+        rms_bond_length=bonded_beads_distance(simname,root_mean_square=True)
+    outer_index=0
+    all_chains=list(coords['timestep_0'].mol.unique())
+    nc = len(all_chains)
+    persis_length_outer_list=[None]*nc
+    for key in coords:
+        for chain in all_chains:
+            persis_length_list =[]
+            coord_curr=coords[key][coords[key]['mol']==chain]
+            dp = len(coord_curr)
+            id_start=(dp)*(chain-1)+1
+            if sidechain:
+                id_end = (chain-1)*dp + 89
+                coord_curr_copy=get_new_chain_coords_forsidechainmodel(coord_curr,bs,bondids)
+                dp = 89
+            else:
+                id_end = (chain)*(dp)
+                coord_curr_copy = get_new_chain_coords(coord_curr, bs)
+            H=id_start + int(dp/2) # half
+            r_n = coord_curr_copy[coord_curr_copy['id']==H].iloc[:,coord_loc[0]:coord_loc[1]].values
+            r_m = coord_curr_copy[coord_curr_copy['id']==H + 1].iloc[:,coord_loc[0]:coord_loc[1]].values
+            vec_b_nm = r_m - r_n
+            vec_b_nm=vec_b_nm[0]
+            sum_iter=int(dp/2)-1
+            for index in range(sum_iter):
+                left_index = H - index
+                right_index = H + index
+                r_flt = coord_curr_copy[coord_curr_copy['id']==left_index].iloc[:,coord_loc[0]:coord_loc[1]].values # first left term
+                r_slt = coord_curr_copy[coord_curr_copy['id']==left_index+1].iloc[:,coord_loc[0]:coord_loc[1]].values # second left term
+                b_left = r_slt - r_flt
+                r_frt = coord_curr_copy[coord_curr_copy['id']==right_index].iloc[:,coord_loc[0]:coord_loc[1]].values # first right term
+                r_srt = coord_curr_copy[coord_curr_copy['id']==right_index+1].iloc[:,coord_loc[0]:coord_loc[1]].values # second right term
+                b_right = r_srt - r_frt
+                b_left=b_left[0]
+                b_right=b_right[0]
+                curr_plength=np.dot(vec_b_nm,b_left)+np.dot(vec_b_nm,b_right)
+                persis_length_list.append(curr_plength)
+            #r_end = coord_curr_copy[coord_curr_copy['id']==id_end].iloc[:,coord_loc[0]:coord_loc[1]].values
+            #vec_ee = r_end - r_1
+            #vec_ee=vec_ee[0]
+            #persis_length_outer_list[outer_index]=np.dot(vec_b_nm,vec_ee)/rms_bond_length
+            #cos_sim = np.dot(vec_b_nm, vec_ee)/(np.linalg.norm(vec_b_nm)*np.linalg.norm(vec_ee))
+            #print(cos_sim*180/np.pi)
+            persis_length_outer_list[outer_index]=(np.sum(persis_length_list))/(2*rms_bond_length)
+            outer_index+=1
+    lp=np.mean(persis_length_outer_list)
+    return lp, persis_length_outer_list
+
+def hydro_helper(dp,id_start,coord_curr_copy,coord_loc):
+    hydro_radius=0
+    for outer_index in range(dp):
+        for inner_index in range(dp):
+            if outer_index!=inner_index:
+                id_r1=id_start + outer_index
+                id_r2=id_start + inner_index
+                r_1 = coord_curr_copy[coord_curr_copy['id']==id_r1].iloc[:,coord_loc[0]:coord_loc[1]].values
+                r_2 = coord_curr_copy[coord_curr_copy['id']==id_r2].iloc[:,coord_loc[0]:coord_loc[1]].values
+                r_12 = r_2 - r_1
+                r_12=np.linalg.norm(r_12[0])
+                if r_12!=0:
+                    r_inverse12=np.power(r_12,(-1))
+                hydro_radius+=r_inverse12
+    return hydro_radius
+
+def hydrodynamic_radius(simname,topologyfilename,coord_loc=[3,6],sidechain=False):
+    coords, bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    outermost_index=0
+    all_chains=list(coords['timestep_0'].mol.unique())
+    if sidechain:
+        bondids = get_bonds_atomids(topologyfilename)
+    hydro_outer_list=[0]*256
+    key='timestep_0'
+    for chain in all_chains:
+        coord_curr=coords[key][coords[key]['mol']==chain]
+        dp = len(coord_curr)
+        id_start=(dp)*(chain-1)+1
+        id_end = (chain)*(dp)
+        if sidechain:
+            coord_curr_copy=get_new_chain_coords_forsidechainmodel(coord_curr,bs,bondids)
+        else:
+            coord_curr_copy = get_new_chain_coords(coord_curr, bs)
+        hydro_radius=hydro_helper(dp,id_start,coord_curr_copy,coord_loc)
+        hydro_outer_list[outermost_index]=np.power((hydro_radius/(dp**2)),-1)
+        outermost_index+=1
+    hydro=np.mean(hydro_outer_list)
+    return hydro, hydro_outer_list
+
 def cluster_analysis(simname,cutoff,coords_loc=[3,6]):
     """Read a LAMMPS trajectory (extract_unwrapped) based on the given filename 
     (first timestep/snapshot only) and returns the number of clusters and size
@@ -216,6 +458,70 @@ def cluster_analysis_array(simname,cutoff,coords_loc=[3,6]):
     print(mean_size/len(cluster_copy))
     return cluster_copy
 
+def prolateness_parameter(simname,topologyfilename,coords_loc=[3,6],sidechain=False):
+    """Compute the Prolateness parameter and Asphericity of a given polymer. Eigenvalues of the
+    gyration polymer are used to compute the shape parameter.
+
+    Args:
+    simname (str): Name of the simulation
+
+    Returns:
+    A_s (list): List containing asphericity parameter of every chain.
+    P_s (list): List containing prolateness parameter of every chain.
+
+    Reference: 
+    1. Arkın, H., & Janke, W. (2013). Gyration tensor based analysis of the shapes of 
+    polymer chains in an attractive spherical cage. The Journal of chemical 
+    physics, 138(5), 054904. 
+    https://aip.scitation.org/doi/abs/10.1063/1.4788616?journalCode=jcp
+    2. Ma, B., Nguyen, T. D., & Olvera de la Cruz, M. (2019). Control of Ionic Mobility
+    via Charge Size Asymmetry in Random Ionomers. Nano letters, 20(1), 43-49.
+    https://pubs.acs.org/doi/abs/10.1021/acs.nanolett.9b02743
+    """
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    all_chains=list(coord['timestep_0'].mol.unique())
+    coord=coord['timestep_0']
+    sidehx = bs[0]/2
+    sidehy = bs[1]/2
+    sidehz = bs[2]/2
+    all_gyration_tensors={}
+    P_s={}
+    A_s={}
+    if sidechain:
+        bondids = get_bonds_atomids(topologyfilename)
+    #for index, key in enumerate(coord):
+    for index,chain in enumerate(all_chains):
+        coord_curr=coord[coord['mol']==chain]
+        dp = len(coord_curr)
+        if sidechain:
+            coord_curr_copy=get_new_chain_coords_forsidechainmodel(coord_curr,bs,bondids)
+        else:
+            coord_curr_copy = get_new_chain_coords(coord_curr, bs)
+        all_gyration_tensors[index]=np.zeros((3,3))
+        coord_curr_copy=coord_curr_copy.iloc[:,coords_loc[0]:coords_loc[1]].values
+        xcom,ycom,zcom=np.mean(coord_curr_copy,axis=0) #Find the center of mass of the cluster
+        ### Find the gyration tensor of the cluster and compute its eigenvalues and use the eigenvalues
+        ### to compute the asphericity parameter. 
+        for element in coord_curr_copy:
+            dx = element[0] - xcom
+            dy = element[1] - ycom
+            dz = element[2] - zcom
+            all_gyration_tensors[index][0,0]+=(dx)**2
+            all_gyration_tensors[index][0,1]+=(dx)*(dy)
+            all_gyration_tensors[index][0,2]+=(dx)*(dz)
+            all_gyration_tensors[index][1,0]+=(dx)*(dy)
+            all_gyration_tensors[index][1,1]+=(dy)**2
+            all_gyration_tensors[index][1,2]+=(dy)*(dz)
+            all_gyration_tensors[index][2,0]+=(dx)*(dz)
+            all_gyration_tensors[index][2,1]+=(dy)*(dz)
+            all_gyration_tensors[index][2,2]+=(dz)**2
+        all_gyration_tensors[index]=all_gyration_tensors[index]/128
+        w, v = np.linalg.eig(all_gyration_tensors[index])
+        l_bar=(w[0]+w[1]+w[2])/3
+        P_s[index]= ((w[0]-l_bar)*(w[1]-l_bar)*(w[2]-l_bar))/(l_bar**3)
+        A_s[index]= ((w[0] - w[1])**2 + (w[1]-w[2])**2 + (w[2]-w[0])**2)/(2*(w[0]**2 +w[1]**2+w[2]**2))
+    return list(P_s.values()),list(A_s.values())
+
 def asphericity_parameter(cluster,simname,coords_loc=[3,6]):
     """Compute the asphericity parameter of a given cluster. Eigenvalues of the
     gyration tensor are used to compute the shape parameter.
@@ -243,30 +549,84 @@ def asphericity_parameter(cluster,simname,coords_loc=[3,6]):
     sidehy = bs[1]/2
     sidehz = bs[2]/2
     all_gyration_tensors={}
-    A_s={}
+    A_s=[]
     for index, key in enumerate(cluster):
+        if len(cluster[key])>2:
+            all_gyration_tensors[index]=np.zeros((3,3))
+            curr_matrix=np.zeros((len(cluster[key]),3))
+            ### Find x, y, z coordinates of beads based on ids present in the cluster
+            for inner_index, atomid in enumerate(cluster[key]):
+                curr_matrix[inner_index] = coord[coord['id']==atomid].iloc[:,coords_loc[0]:coords_loc[1]].values
+            cluster_size = len(curr_matrix)
+            reference_bead = curr_matrix[0]
+            for outer_element in range(cluster_size):
+                dist = np.linalg.norm(reference_bead - curr_matrix[outer_element])
+                if dist>sidehx:
+                    new_bead_outer = periodic_distance_return_new_coords(curr_matrix[outer_element][0],curr_matrix[outer_element][1],curr_matrix[outer_element][2],
+                    reference_bead[0],reference_bead[1],reference_bead[2],sidehx,sidehy,sidehz,bs)
+                    curr_matrix[outer_element][0]=new_bead_outer[0]
+                    curr_matrix[outer_element][1]=new_bead_outer[1]
+                    curr_matrix[outer_element][2]=new_bead_outer[2]
+            xcom,ycom,zcom=np.mean(curr_matrix,axis=0) #Find the center of mass of the cluster
+            ### Find the gyration tensor of the cluster and compute its eigenvalues and use the eigenvalues
+            ### to compute the asphericity parameter. 
+            for element in curr_matrix:
+                dx = element[0] - xcom
+                dy = element[1] - ycom
+                dz = element[2] - zcom
+                all_gyration_tensors[index][0,0]+=(dx)**2
+                all_gyration_tensors[index][0,1]+=(dx)*(dy)
+                all_gyration_tensors[index][0,2]+=(dx)*(dz)
+                all_gyration_tensors[index][1,0]+=(dx)*(dy)
+                all_gyration_tensors[index][1,1]+=(dy)**2
+                all_gyration_tensors[index][1,2]+=(dy)*(dz)
+                all_gyration_tensors[index][2,0]+=(dx)*(dz)
+                all_gyration_tensors[index][2,1]+=(dy)*(dz)
+                all_gyration_tensors[index][2,2]+=(dz)**2
+            all_gyration_tensors[index]=all_gyration_tensors[index]/len(cluster[key])
+            w, v = np.linalg.eig(all_gyration_tensors[index])
+            A_s.append(((w[0] - w[1])**2 + (w[1]-w[2])**2 + (w[2]-w[0])**2)/(2*(w[0]**2 +w[1]**2+w[2]**2)))
+    return A_s
+
+def eigenvalue_based_rog(simname,coord_loc=[3,6]):
+    """Compute radius of gyration based on eigenvalue of gyration tensor. 
+    """
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    coord=coord['timestep_0']
+    sidehx = bs[0]/2
+    sidehy = bs[1]/2
+    sidehz = bs[2]/2
+    all_gyration_tensors={}
+    rog={}
+    for index, chain in enumerate(list(coord.mol.unique())):
         all_gyration_tensors[index]=np.zeros((3,3))
-        curr_matrix=np.zeros((len(cluster[key]),3))
-        ### Find x, y, z coordinates of beads based on ids present in the cluster
-        for inner_index, atomid in enumerate(cluster[key]):
-            curr_matrix[inner_index] = coord[coord['id']==atomid].iloc[:,coords_loc[0]:coords_loc[1]].values
+        curr_matrix=coord[coord['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values            
         xcom,ycom,zcom=np.mean(curr_matrix,axis=0) #Find the center of mass of the cluster
         ### Find the gyration tensor of the cluster and compute its eigenvalues and use the eigenvalues
         ### to compute the asphericity parameter. 
         for element in curr_matrix:
-            all_gyration_tensors[index][0,0]+=(element[0]-xcom)**2
-            all_gyration_tensors[index][0,1]+=(element[0]-xcom)*(element[1]-ycom)
-            all_gyration_tensors[index][0,2]+=(element[0]-xcom)*(element[2]-zcom)
-            all_gyration_tensors[index][1,0]+=(element[0]-xcom)*(element[1]-ycom)
-            all_gyration_tensors[index][1,1]+=(element[1]-ycom)**2
-            all_gyration_tensors[index][1,2]+=(element[1]-ycom)*(element[2]-zcom)
-            all_gyration_tensors[index][2,0]+=(element[0]-xcom)*(element[2]-zcom)
-            all_gyration_tensors[index][2,1]+=(element[1]-ycom)*(element[2]-zcom)
-            all_gyration_tensors[index][2,2]+=(element[2]-zcom)**2
-        all_gyration_tensors[index]=all_gyration_tensors[index]/len(cluster[key])
+            dx = element[0] - xcom
+            dy = element[1] - ycom
+            dz = element[2] - zcom
+            if (dx < -sidehx):   dx = dx + bs[0]
+            if (dx > sidehx):    dx = dx - bs[0]
+            if (dy < -sidehy):   dy = dy + bs[1]
+            if (dy > sidehy):    dy = dy - bs[1]
+            if (dz < -sidehz):   dz = dz + bs[2]
+            if (dz > sidehz):    dz = dz - bs[2]
+            all_gyration_tensors[index][0,0]+=(dx)**2
+            all_gyration_tensors[index][0,1]+=(dx)*(dy)
+            all_gyration_tensors[index][0,2]+=(dx)*(dz)
+            all_gyration_tensors[index][1,0]+=(dx)*(dy)
+            all_gyration_tensors[index][1,1]+=(dy)**2
+            all_gyration_tensors[index][1,2]+=(dy)*(dz)
+            all_gyration_tensors[index][2,0]+=(dx)*(dz)
+            all_gyration_tensors[index][2,1]+=(dy)*(dz)
+            all_gyration_tensors[index][2,2]+=(dz)**2
+        all_gyration_tensors[index]=all_gyration_tensors[index]/128
         w, v = np.linalg.eig(all_gyration_tensors[index])
-        A_s[index]= ((w[0] - w[1])**2 + (w[1]-w[2])**2 + (w[2]-w[0])**2)/(2*(w[0]**2 +w[1]**2+w[2]**2))
-    return list(A_s.values())
+        rog[index]=(w[0]+w[1]+w[2])**(0.5)
+    return list(rog.values())
 
 def find_pairs(simname,coords_loc=[3,6]):
     """Reads a filename and  returns a dictionary with timesteps as keys
@@ -405,7 +765,96 @@ def find_pairs_unique(simname,coords_loc=[3,6]):
         matched_pair[key] =matched_pair[key][~np.all(matched_pair[key] == 0, axis=1)]
     print((matched/(matched+unmatched))*100)
     return matched_pair
-    
+
+def find_decorrelation_pairs_new(current_timestep,box_l,cutoff,coords_loc=[3,6]):
+    """Find unique pairs at the given timestep.
+    """
+    type2=current_timestep[current_timestep['type']==2].iloc[:,
+        coords_loc[0]:coords_loc[1]].values 
+    type3=current_timestep[current_timestep['type']==3].iloc[:,
+        coords_loc[0]:coords_loc[1]].values 
+    distsn=np.zeros((type3.shape[0],1))
+    distsp=np.zeros((type2.shape[0],1))
+    matched_pair=np.zeros((type2.shape[0],3))
+    repeat_checkn = []
+    pairs_under_cutoff=0
+    nrepeat=0
+    matched=0
+    unmatched=0
+    sidehx=box_l[0]/2
+    sidehy=box_l[1]/2
+    sidehz=box_l[2]/2
+    for pindex,pcharge in enumerate(type2):
+        for nindex,ncharge in enumerate(type3):
+            dx = pcharge[0] - ncharge[0]
+            dy = pcharge[1] - ncharge[1]
+            dz = pcharge[2] - ncharge[2]
+            if (dx < -sidehx):   dx = dx + box_l[0]
+            if (dx > sidehx):    dx = dx - box_l[0]
+            if (dy < -sidehy):   dy = dy + box_l[1]
+            if (dy > sidehy):    dy = dy - box_l[1]
+            if (dz < -sidehz):   dz = dz + box_l[2]
+            if (dz > sidehz):    dz = dz - box_l[2]
+            distAB = [dx,dy,dz]
+            distsn[nindex] = np.linalg.norm(distAB)
+        closest_ncharge_id = np.argmin(distsn)
+        for positiveindex,positivecharge in enumerate(type2):
+            dx = positivecharge[0] - type3[closest_ncharge_id][0]
+            dy = positivecharge[1] - type3[closest_ncharge_id][1]
+            dz = positivecharge[2] - type3[closest_ncharge_id][2]
+            if (dx < -sidehx):   dx = dx + box_l[0]
+            if (dx > sidehx):    dx = dx - box_l[0]
+            if (dy < -sidehy):   dy = dy + box_l[1]
+            if (dy > sidehy):    dy = dy - box_l[1]
+            if (dz < -sidehz):   dz = dz + box_l[2]
+            if (dz > sidehz):    dz = dz - box_l[2]
+            distAB = [dx,dy,dz]
+            distsp[positiveindex] = np.linalg.norm(distAB)
+        closest_pcharge_id = np.argmin(distsp)
+        if closest_pcharge_id == pindex:
+            if closest_ncharge_id in repeat_checkn:
+                nrepeat=+1
+                unmatched=+1
+            else:
+                repeat_checkn.append(closest_ncharge_id)
+                matched+=1
+                dx = pcharge[0] - type3[closest_ncharge_id][0]
+                dy = pcharge[1] - type3[closest_ncharge_id][1]
+                dz = pcharge[2] - type3[closest_ncharge_id][2]
+                if (dx < -sidehx):   dx = dx + box_l[0]
+                if (dx > sidehx):    dx = dx - box_l[0]
+                if (dy < -sidehy):   dy = dy + box_l[1]
+                if (dy > sidehy):    dy = dy - box_l[1]
+                if (dz < -sidehz):   dz = dz + box_l[2]
+                if (dz > sidehz):    dz = dz - box_l[2]
+                distAB = [dx,dy,dz]
+                positivechargeid=current_timestep[current_timestep['xu']==pcharge[0]]
+                positivechargeid=positivechargeid[positivechargeid['yu']==pcharge[1]]
+                positivechargeid=positivechargeid[positivechargeid['zu']==pcharge[2]] 
+                negativechargeid=current_timestep[current_timestep['xu']==type3[closest_ncharge_id][0]] 
+                negativechargeid=negativechargeid[negativechargeid['yu']==type3[closest_ncharge_id][1]]
+                negativechargeid=negativechargeid[negativechargeid['zu']==type3[closest_ncharge_id][2]] 
+                if np.linalg.norm(distAB)<cutoff:
+                    pairs_under_cutoff+=1
+                matched_pair[pindex] = [int(positivechargeid['id']), int(negativechargeid['id']), np.linalg.norm(distAB)]
+
+        else:
+            unmatched+=1
+    matched_pair =matched_pair[~np.all(matched_pair == 0, axis=1)]
+    print((matched/(matched+unmatched))*100)
+    return pairs_under_cutoff
+
+def wrapper_decorrelation_pairs_new(simname,cutoff):
+    """
+    """
+    coord, bs = extract.extract_unwrapped(simname, boxsize_whole=True)
+    pairs_under_cutoff=[None]*len(coord)
+    index = 0
+    for key in coord:
+        pairs_under_cutoff[index] = find_decorrelation_pairs_new(coord[key],bs[key],cutoff)
+        index+=1
+    return pairs_under_cutoff
+
 def find_decorrelation_pairs(simname,cutoff,coords_loc=[3,6]):
     """Find out how many charges have an oppositely charged bead within 
     the given cutoff. I am checking how many negative beads have positive
@@ -585,7 +1034,8 @@ def radius_of_gyration(coords,mass,coord_loc = [3,6]):
         index+=1
     return rog
 
-def radius_of_gyration_squared(coords,mass,coord_loc = [3,6]):
+def radius_of_gyration_squared(coords,mass,bs,topologyfilename,sidechain=False,
+hist=False,coord_loc = [3,6]):
     """Compute the mean radius of gyration (squared) for each timestep stored in the distance
     dictionary (for each chain)
     
@@ -603,93 +1053,104 @@ def radius_of_gyration_squared(coords,mass,coord_loc = [3,6]):
     """
     rog=[None]*len(coords)
     index=0
+    sidehx = bs[0]/2
+    sidehy = bs[1]/2
+    sidehz = bs[2]/2
+    if sidechain:
+        bondids = get_bonds_atomids(topologyfilename)
+    all_chains = list(coords['timestep_0'].mol.unique())
     for key in coords:
         rg=[]
-        for chain in list(coords[key].mol.unique()):
-            coord_curr=coords[key][coords[key]['mol']==chain].iloc[:,coord_loc[0]:coord_loc[1]].values            
+        for chain in all_chains:
+            coord_curr=coords[key][coords[key]['mol']==chain]
+            if sidechain:
+                coord_curr=get_new_chain_coords_forsidechainmodel(coord_curr,bs,bondids)
+            else:
+                coord_curr=get_new_chain_coords(coord_curr,bs)
+            coord_curr=coord_curr.iloc[:,coord_loc[0]:coord_loc[1]].values
             com = np.mean(coord_curr,axis=0)
             dist_from_com=(np.linalg.norm(coord_curr - com))**2
             numer=mass*(np.sum(dist_from_com))
             denom=mass*len(coord_curr)
             rg.append(numer/denom)            
-        rog[index] = round(np.mean(rg),3)
+        if hist:
+            rog[index] = rg
+        else:
+            rog[index] = np.sqrt(np.mean(rg))
         index+=1
     return rog
 
-def end_to_end_distance(coords,coords_loc=[3,6],sidechain=False):
-    """Compute the average end to end distance of the system.
-    Args:
-    coords (dict):  dictionary with the number of timesteps as keys and 
-        coordinates of all atoms at the corresponding timestep as a pandas 
-        dataframe.
-    coord_loc (list): Column start number and column end number for x,y and z
-        coordinates in the coords dictionary. Default is 3 to 6 (for unwrapped)
-
-    Returns:
-    rend (list): Python list with with mean end to end distance at
-     each timestep.
+def wrapper_radius_of_gyration_squared(simname,topologyfilename,sidechain=False,mass=1,hist=False):
+    """^^
     """
-    rend_list = [None]*len(coords)
-    index=0
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rog=radius_of_gyration_squared(coord, mass,bs,topologyfilename,sidechain=sidechain,hist=hist)
+    return rog
+
+def individual_bead_rend(simname,coords_loc=[3,6],sidechain=False):
+    """The end_to_end_distance_squared function is not returning correct
+    end to end distance. The reason seems to be the wrapping of the beads
+    back into the box (the problem remains with unwrapped coordinates as well).
+    This function first finds out the unwrapped coordinate of each bead and then
+    computes the end to end distance.
+    """
+    coords, bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rend_list=[None]*len(coords)
+    sidehx=bs[0]/2
+    sidehy=bs[1]/2
+    sidehz=bs[2]/2
+    all_chains=list(coords['timestep_0'].mol.unique())
+    index_outer=0
     for key in coords:
         rend=[]
-        for chain in list(coords[key].mol.unique()):
+        for chain in all_chains:
             coord_curr=coords[key][coords[key]['mol']==chain]
-            id_start = (len(coord_curr))*(chain-1) + 1
+            id_start=(len(coord_curr))*(chain-1)+1
             if sidechain:
                 id_end = (chain-1)*len(coord_curr) + 89
             else:
                 id_end = (chain)*(len(coord_curr))
-            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values
-            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values
-            curr_dist = np.linalg.norm(r_end-r_start)
-            rend.append(curr_dist)
-        rend_list[index] = round(np.mean(rend),3)
-        index+=1
+            r_start=coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+            coord_curr_copy=get_new_chain_coords(coord_curr,bs)
+            r_end_copy=coord_curr_copy[coord_curr_copy['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+            rend.append(np.linalg.norm(r_end_copy-r_start))
+        rend_list[index_outer]=rend
+        index_outer+=1
     return rend_list
 
-def end_to_end_distance_2(coords,coords_loc=[3,6],sidechain=False):
-    """Compute the average end to end distance of the system.
-    Args:
-    coords (dict):  dictionary with the number of timesteps as keys and 
-        coordinates of all atoms at the corresponding timestep as a pandas 
-        dataframe.
-    coord_loc (list): Column start number and column end number for x,y and z
-        coordinates in the coords dictionary. Default is 3 to 6 (for unwrapped)
-
-    Returns:
-    rend (list): Python list with with mean end to end distance at
-     each timestep.
+def get_bond_vectors(coord_curr_copy):
+    """Based on the given timestep coordinates, find out the bond vectors.
     """
-    rend_list = [None]*len(coords)
-    index=0
-    index_chain=0
+    bond_vectors = np.zeros((len(coord_curr_copy)-1,3))
+    for index, element in enumerate(coord_curr_copy.iterrows()):
+        if index!=127:
+            r_1=coord_curr_copy.iloc[index,3:6].values
+            r_2=coord_curr_copy.iloc[index+1,3:6].values
+            bond_vectors[index,:]=r_2-r_1
+    return bond_vectors
+
+def mean_squared_end_to_end(simname,coords_loc=[3,6]):
+    """This function is another way to compute the end to end vector. The method
+    is validated. The answers are identical to individual_bead_rend function.
+    """
+    coords, bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rend_list=[None]*len(coords)
+    all_chains=list(coords['timestep_0'].mol.unique())
+    rend_inner_list=[None]*len(all_chains)
+    index_outer=0
     for key in coords:
-        rend=[]
-        for chain in list(coords[key].mol.unique()):
+        for chain in all_chains:
+            rend=[]
             coord_curr=coords[key][coords[key]['mol']==chain]
-            id_start = (len(coord_curr))*(chain-1) + 1
-            if sidechain:
-                id_end = (chain-1)*len(coord_curr) + 89
-            else:
-                id_end = (chain)*(len(coord_curr))
-            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values
-            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values
-            print(coord_curr[coord_curr['id']==id_start].iloc[:,6:9].values[0],coord_curr[coord_curr['id']==id_end].iloc[:,6:9].values[0])
-            if np.all(coord_curr[coord_curr['id']==id_start].iloc[:,6:9].values[0] == coord_curr[coord_curr['id']==id_end].iloc[:,6:9].values[0]):
-                print('true')
-                curr_dist = np.linalg.norm(r_end-r_start)
-                rend.append(curr_dist)
-                index_chain+=1
-            else:
-                print('false')
+            coord_curr_copy=get_new_chain_coords(coord_curr,bs)
+            coord_curr_copy=get_bond_vectors(coord_curr_copy)
+            for outer_id in range(len(coord_curr_copy)):
+                for inner_id in range(len(coord_curr_copy)):
+                    rend.append(np.dot(coord_curr_copy[outer_id],coord_curr_copy[inner_id]))
+            rend_inner_list[int(chain-1)]=np.sum(rend)
+    return rend_inner_list
             
-        rend_list[index] = round(np.mean(rend),3)
-        index+=1
-    print(index_chain)
-    return rend_list
-
-def end_to_end_distance_squared(coords,coords_loc=[3,6],sidechain=False):
+def end_to_end_distance_squared(coords,bs,coords_loc=[3,6],sidechain=False,hist=False):
     """Compute the average end to end distance of the system.
     Args:
     coords (dict):  dictionary with the number of timesteps as keys and 
@@ -705,6 +1166,9 @@ def end_to_end_distance_squared(coords,coords_loc=[3,6],sidechain=False):
     rend_list = [None]*len(coords)
     gauss_list={}
     index=0
+    sidehx = bs[0]/2
+    sidehy = bs[1]/2
+    sidehz = bs[2]/2
     for key in coords:
         rend=[]
         gauss_list[key]=[]
@@ -715,14 +1179,25 @@ def end_to_end_distance_squared(coords,coords_loc=[3,6],sidechain=False):
                 id_end = (chain-1)*len(coord_curr) + 89
             else:
                 id_end = (chain)*(len(coord_curr))
-            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values
-            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values
-            curr_dist = np.linalg.norm(r_end-r_start)
+            r_start = coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+            r_end = coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+            curr_dist= periodic_distance(r_end[0],r_end[1],r_end[2],
+                 r_start[0],r_start[1],r_start[2],
+                 sidehx,sidehy,sidehz,bs)
+            #curr_dist = np.linalg.norm(r_end-r_start)
             rend.append(curr_dist**2)
             gauss_list[key].append(curr_dist)
-        rend_list[index] = round(np.mean(rend),3)
+        if hist:
+            rend_list[index]=rend
+        else:
+            rend_list[index] = np.sqrt(round(np.mean(rend),3))
         index+=1
     return rend_list, gauss_list
+
+def wrapper_end_squared(simname,hist=False,coords_loc=[3,6]):
+    coord, bs=extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rend=end_to_end_distance_squared(coord, bs,hist=hist)
+    return rend
 
 def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
     nhis=200,save=False):
@@ -791,6 +1266,143 @@ def radial_distribution_function(coordinates,box_l,simname,coords_loc=[3,6],
     f.close()
     return g, r
 
+def radial_distribution_function_all(coordinates,box_l,simname,coords_loc=[3,6],
+    nhis=200,save=False):
+    """Compute the radial distribution function for given coordinates.
+
+    Args:
+    coordinates (array): Coordinates (x,y,z)
+    nhis (int): Number of bins in histogram
+
+    Returns:
+    rdf ()
+    """
+    coords=coordinates.iloc[:,coords_loc[0]:coords_loc[1]].values #Convert 
+        #to numpy array
+    npart=np.size(coords,0) #Total number of particles
+    """Initialize the histogram"""
+    delg=box_l[0]/(2*nhis) #Compute size of one bin
+    sidehx=box_l[0]/2
+    sidehy=box_l[1]/2
+    sidehz=box_l[2]/2
+    g=[None]*nhis #Initialize g(r)
+    for index in range(nhis):
+        g[index]=0 #make every element zero. Can be skipped if used 0 instead
+        # of None on Line 43.
+    """Loop over pairs and determine the distribution of distances"""
+    for partA in range(npart-1): #Don't loop over the last particle because 
+        #we have two loop over the particles
+        for partB in range(partA+1,npart): #Start from the next particle to 
+            #avoid repetition of neighbor bins
+            #Calculate the particle-particle distance
+            dx = coords[partA][0] - coords[partB][0]
+            dy = coords[partA][1] - coords[partB][1]
+            dz = coords[partA][2] - coords[partB][2]
+            if (dx < -sidehx):   dx = dx + box_l[0]
+            if (dx > sidehx):    dx = dx - box_l[0]
+            if (dy < -sidehy):   dy = dy + box_l[1]
+            if (dy > sidehy):    dy = dy - box_l[1]
+            if (dz < -sidehz):   dz = dz + box_l[2]
+            if (dz > sidehz):    dz = dz - box_l[2]
+            distAB = [dx,dy,dz]
+            r=np.linalg.norm(distAB) #Compute the magnitude of the distance
+            if r<(box_l[0]/2): #Check if distance is within cutoff (here half
+                # of box length)
+                ig=int(r/delg) #Check which bin the particle belongs to 
+                g[ig]=g[ig]+2 #Add two particles to that bin's index 
+                #(because it's a pair)
+    """Normalize the radial distribution function"""
+    rho=npart/(box_l[0]**3) #Number density
+    for index in range(nhis): 
+        r=delg*(index+1)
+        #volume=4*np.pi*r*r*delg #Volume betweeen bin i+1 and i
+        v1 = (4/3)*np.pi*(r**3)
+        v2= (4/3)*np.pi*((r+delg)**3)
+        volume=v2-v1
+        g[index]=g[index]/npart #Divide your current count by the total
+        # number
+            # of particles in the system
+        g[index]=g[index]/volume #Divide by the volume of the current bin
+        g[index]=g[index]/rho #Divide by the number density of an ideal gas
+    r=np.arange(0,box_l[0]/2,delg) #Create a numpy array with delg as distance
+    fwrite=simname + '_all_beads_rdf.txt' #Filename for writing r and g(r) values
+    f=open(fwrite,'w')
+    f.write('r \t\t\t g(r)\n')
+    for index in range(len(g)): #Write r and g(r) values
+        f.write('%s\t%s\n'%(r[index],g[index]))
+    f.close()
+    return g, r
+
+def radial_distribution_function_pairs(coordinates,box_l,simname,coords_loc=[3,6],
+    nhis=200,save=False):
+    """Compute the radial distribution function for given coordinates.
+
+    Args:
+    coordinates (array): Coordinates (x,y,z)
+    nhis (int): Number of bins in histogram
+
+    Returns:
+    rdf ()
+    """
+    coords_p=coordinates[coordinates['type']==2].iloc[:,coords_loc[0]:coords_loc[1]].values #Convert 
+        #to numpy array
+    coords_n=coordinates[coordinates['type']==3].iloc[:,coords_loc[0]:coords_loc[1]].values 
+    npart_p=np.size(coords_p,0) #Total number of particles
+    npart_n=np.size(coords_n,0)
+    """Initialize the histogram"""
+    delg=box_l[0]/(2*nhis) #Compute size of one bin
+    sidehx=box_l[0]/2
+    sidehy=box_l[1]/2
+    sidehz=box_l[2]/2
+    g=[None]*nhis #Initialize g(r)
+    for index in range(nhis):
+        g[index]=0 #make every element zero. Can be skipped if used 0 instead
+        # of None on Line 43.
+    """Loop over pairs and determine the distribution of distances"""
+    for partA in range(npart_p): #Don't loop over the last particle because 
+        #we have two loop over the particles
+        for partB in range(npart_n): #Start from the next particle to 
+            #avoid repetition of neighbor bins
+            #Calculate the particle-particle distance
+            dx = coords_p[partA][0] - coords_n[partB][0]
+            dy = coords_p[partA][1] - coords_n[partB][1]
+            dz = coords_p[partA][2] - coords_n[partB][2]
+            if (dx < -sidehx):   dx = dx + box_l[0]
+            if (dx > sidehx):    dx = dx - box_l[0]
+            if (dy < -sidehy):   dy = dy + box_l[1]
+            if (dy > sidehy):    dy = dy - box_l[1]
+            if (dz < -sidehz):   dz = dz + box_l[2]
+            if (dz > sidehz):    dz = dz - box_l[2]
+            distAB = [dx,dy,dz]
+            r=np.linalg.norm(distAB) #Compute the magnitude of the distance
+            if r<(box_l[0]/2): #Check if distance is within cutoff (here half
+                # of box length)
+                ig=int(r/delg) #Check which bin the particle belongs to 
+                g[ig]=g[ig]+1 #Add two particles to that bin's index 
+                #(because it's a pair)
+    """Normalize the radial distribution function"""
+    npart=npart_p
+    rho=npart/(box_l[0]**3) #Number density
+    for index in range(nhis): 
+        r=delg*(index+1)
+        #volume=4*np.pi*r*r*delg #Volume betweeen bin i+1 and i
+        v1 = (4/3)*np.pi*(r**3)
+        v2= (4/3)*np.pi*((r+delg)**3)
+        volume=v2-v1
+        g[index]=g[index]/npart #Divide your current count by the total
+        # number
+            # of particles in the system
+        g[index]=g[index]/volume #Divide by the volume of the current bin
+        g[index]=g[index]/rho #Divide by the number density of an ideal gas
+    r=np.arange(0,box_l[0]/2,delg) #Create a numpy array with delg as distance
+    fwrite=simname + '_pairs_rdf.txt' #Filename for writing r and g(r) values
+    f=open(fwrite,'w')
+    f.write('r \t\t\t g(r)\n')
+    for index in range(len(g)): #Write r and g(r) values
+        f.write('%s\t%s\n'%(r[index],g[index]))
+    f.close()
+    return g, r
+
 def structure_factor(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6]):
     """
     Arguments:
@@ -816,7 +1428,7 @@ def structure_factor(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6]):
     """Create list of k values"""
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     #SET DELTA K AND KMAX OVER HERE
-    delk=(2*np.pi)/box_l #Set delta k
+    delk=(2*np.pi)/10000 #Set delta k
     kmax=int(8/delk) #Set maximum value of k around 10-11
     #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     kx=[]
@@ -844,7 +1456,7 @@ def structure_factor(coordinates, rdf_fname,box_l,simname,coords_loc=[3,6]):
             term2den=km[value]*r[particle]
             term3=g[particle]
             t1[particle]=((term1*term2num*term3)/(term2den))
-        integral=simps(t1) #integrate
+        integral=np.abs(simps(t1)) #integrate
         sk[value]=1+ 4*np.pi*rho*integral #Assign to S(k) value
     fwrite=simname+'structure_factor.txt' #Write the values 
     f=open(fwrite,'w')
@@ -889,7 +1501,55 @@ def wrapper_chain_orientation_parameter(simname, nc, dp,
             cop_list_z.append(chain_orientation_parameter(coord[key],[0,0,1],nc,dp,sidechain=sc))
         return cop_list_z
 
-def chain_orientation_parameter(curr_coordinates,ex,nc,dp,sidechain=False,
+def get_entanglement_length(simname,coords_loc=[3,6],sidechain=False):
+    """Compute the entanglement length using the primitive path analysis. All intramolecular
+    excluded volume interactions are turned off and intermolecular excluded volume interactions
+    are retained. Maximum FENE bond is set at 1.2 \sigma and temperature is cooled to
+    0.001 \epsilon/\k_b T while keeping the ends of the polymers fixed (crude summary. check
+    reference for complete details)
+    
+    Args:
+    simname (str): Name of the simulation file
+    coord_loc (list): Column number of x, y and z coordinates in the lammps trajectory file.
+
+    Reference:
+    1. Everaers, R., Sukumaran, S. K., Grest, G. S., Svaneborg, C., Sivasubramanian, A., & Kremer, K. (2004). Rheology and microscopic topology of entangled polymeric liquids. Science, 303(5659), 823-826.
+    <link> : https://science.sciencemag.org/content/303/5659/823
+    2. Hoy, R. S., & Robbins, M. O. (2005). Effect of equilibration on primitive path analyses of entangled polymers. Physical Review E, 72(6), 061802.
+    <link> : https://journals.aps.org/pre/abstract/10.1103/PhysRevE.72.061802
+    3. Sukumaran, S. K., Grest, G. S., Kremer, K., & Everaers, R. (2005). Identifying the primitive path mesh in entangled polymer liquids. Journal of Polymer Science Part B: Polymer Physics, 43(8), 917-933.
+    <link> : https://onlinelibrary.wiley.com/doi/10.1002/polb.20384
+    """
+    coord, bs = extract.extract_unwrapped(simname, last_only=True,boxsize=True)
+    coordinates = coord['timestep_0']
+    rendsq = []
+    nc = len(coordinates.mol.unique())
+    diff_array=np.array([])
+    for chain in range(1,nc+1):
+        curr_coordinates=coordinates[coordinates['mol']==chain]
+        coord_curr = get_new_chain_coords(curr_coordinates, bs)
+        id_start=(len(coord_curr))*(chain-1)+1
+        if sidechain:
+            id_end = (chain-1)*len(coord_curr) + 89            
+        else:
+            id_end = (chain)*(len(coord_curr))
+        r_start=coord_curr[coord_curr['id']==id_start].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+        r_end=coord_curr[coord_curr['id']==id_end].iloc[:,coords_loc[0]:coords_loc[1]].values[0]
+        rendsq.append(np.linalg.norm(r_end-r_start)**2)
+        coord_curr = coord_curr.values[:,coords_loc[0]:coords_loc[1]]
+        one_row_shifted=coord_curr[1:,:]
+        coord_curr = np.delete(coord_curr,-1,0)
+        curr_diff_array=coord_curr - one_row_shifted
+        if sidechain:
+            curr_diff_array = curr_diff_array[:88,:]
+        curr_diff_array=np.linalg.norm((curr_diff_array),axis=1)
+        diff_array=np.append(diff_array,curr_diff_array)
+    b_pp = np.mean(diff_array)
+    r_ee = np.mean(rendsq)
+    n_e = (r_ee)/((len(coord_curr) - 1)*(b_pp**2))
+    return n_e, b_pp, r_ee
+
+def chain_orientation_parameter(curr_coordinates_all,ex,nc,dp,bs,topologyfilename,sidechain=False,
                                 coord_loc=[3,6]):
     """Compute the chain orientation parameter for one given timestep.
     
@@ -903,14 +1563,19 @@ def chain_orientation_parameter(curr_coordinates,ex,nc,dp,sidechain=False,
     cop (float): Chain orientation parameter for the particular timestep 
     provided."""
     n_applicable_atoms = nc*dp - nc*2
+    if sidechain:
+        bondids = get_bonds_atomids(topologyfilename)
     p2x = [0]*(n_applicable_atoms)
     orient = 0
     outer_index = 0
     for chain in range(1,nc+1):
+        curr_coordinates=curr_coordinates_all[curr_coordinates_all['mol']==chain]
         begin=(chain -1)*dp + 2
         if sidechain:
+            curr_coordinates=get_new_chain_coords_forsidechainmodel(curr_coordinates,bs,bondids)
             end=(chain-1)*dp + 89
         else:
+            curr_coordinates = get_new_chain_coords(curr_coordinates, bs)
             end = chain*dp
         for index in range(begin,end,1):
             earlier_atom = curr_coordinates[curr_coordinates['id']
@@ -933,20 +1598,35 @@ sidechain=False):
     cep = chain_entanglement_parameter(coord,nc,dp,coord_loc,sidechain=sidechain)
     print('x = %.3f \ny = %.3f \nz = %.3f'%(x,y,z))
 
-def one_timestep_set_of_parameters(simname,nc,dp,mass,coord_loc=[3,6],
-sidechain=False):
-    """Compute chain orientation parameter at one timestep"""
-    coord = extract.extract_unwrapped(simname,first_only=True)
-    #x = chain_orientation_parameter(coord['timestep_0'],[1,0,0],nc,dp,sidechain=sidechain)
-    #y = chain_orientation_parameter(coord['timestep_0'],[0,1,0],nc,dp,sidechain=sidechain)
-    #z = chain_orientation_parameter(coord['timestep_0'],[0,0,1],nc,dp,sidechain=sidechain)
-    cep = chain_entanglement_parameter(coord,nc,dp,coord_loc,sidechain=sidechain)
-    rog = radius_of_gyration(coord, mass)
-    rog_sq = radius_of_gyration_squared(coord, mass)
-    rend = end_to_end_distance(coord,sidechain=sidechain)
-    rend_sq,gauss = end_to_end_distance_squared(coord,sidechain=sidechain)
-    ratio = rend_sq[0]/rog_sq[0]
-    print('cep = %.3f \nms-rog = %.3f \nms-rend = %.3f \nratio = %.3f \nrog = %.3f \nrms = %.3f'%(cep[0],rog_sq[0],rend_sq[0],ratio,rog[0],rend[0]))
+def get_params(simname,topologyfilename,ppa_simname,nc=256,dp=128,sidechain=False,coord_loc=[3,6],hydro=False):
+    coord,bs = extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    rend_v20_3x=rend_32c_v20_3x=individual_bead_rend(simname,sidechain=sidechain)
+    rog_v20_3x_com=wrapper_radius_of_gyration_squared(simname,topologyfilename,sidechain=sidechain,hist=True)
+    p, a = prolateness_parameter(simname,topologyfilename)
+    per_mean, per_list=persistence_length(simname,topologyfilename,sidechain=sidechain)
+    cep=0
+    cep = chain_entang_helper(coord['timestep_0'],cep,nc,dp,bs,coord_loc,topologyfilename,sidechain=sidechain)
+    copx = chain_orientation_parameter(coord['timestep_0'],[1,0,0],nc,dp,bs,topologyfilename,sidechain=sidechain)
+    n_e, bpp, r_ee = get_entanglement_length(ppa_simname,sidechain=sidechain)
+    if hydro:
+        print('computing hydro -- will take a long time')
+        rh_mean,rh_list=compute.hydrodynamic_radius(simname)
+    print('\n\nMean-squared ROG %.2f'%np.mean(rog_v20_3x_com[0]))
+    if hydro:
+        print('Hydrodynamic radius %.2f'%rh_mean)
+        print('Ratio of hydrodynamic radius to RMS radius of gyration %.2f'%((rh_mean)/(np.sqrt(np.mean(rog_v20_3x_com[0])))))
+    print('Mean squared end to end end to end distance %.2f'%np.mean(np.power(rend_v20_3x,2)))
+    print('Ratio rend to rg %.2f'%(np.mean(np.power(rend_v20_3x,2))/np.mean(rog_v20_3x_com[0])))
+    print('Asphericity %.3f'%np.mean(a))
+    print('Prolateness %.3f'%np.mean(p))
+    print('Persistence length %.3f'%per_mean)
+    print('Chain orientation parameter %.3f'%copx)
+    print('Entanglement length %.2f'%n_e)
+    print('Chain entanglement parameter %.3f'%(cep/(nc*dp - nc*20)))
+    print('\n\nEnd to end distance %.2f'%np.mean(rend_v20_3x))
+    print('RMS end to end distance %.2f'%np.sqrt(np.mean(np.power(rend_v20_3x,2))))
+    print('RMS ROG %.2f'%np.sqrt(np.mean(rog_v20_3x_com[0])))
+    
 
 def chain_entanglement_parameter(coord,nc,dp,coord_loc=[3,6],sidechain=False):
     """
@@ -961,13 +1641,18 @@ def chain_entanglement_parameter(coord,nc,dp,coord_loc=[3,6],sidechain=False):
         ent_param[i]= entang/n_applicable_atoms
     return ent_param
 
-def chain_entang_helper(curr_coordinates,entang,nc,dp,coord_loc,sidechain=False):
+def chain_entang_helper(curr_coordinates_all,entang,nc,dp,bs,coord_loc,topologyfilename,sidechain=False):
+    if sidechain:
+        bondids = get_bonds_atomids(topologyfilename)
     for key in range(1,nc+1):
+        curr_coordinates=curr_coordinates_all[curr_coordinates_all['mol']==key]
         begin=(key -1)*dp + 11
         if sidechain:
+            curr_coordinates=get_new_chain_coords_forsidechainmodel(curr_coordinates,bs,bondids)
             end = (key - 1)*dp + 89 - 10
         else:
             end = key*dp - 10 
+            curr_coordinates= get_new_chain_coords(curr_coordinates, bs)
         for index in range(begin,end,1):
             earlier_atom = curr_coordinates[curr_coordinates['id'] == index - 10].values[:,coord_loc[0]:coord_loc[1]]
             ref_atom = curr_coordinates[curr_coordinates['id'] == index].values[:,coord_loc[0]:coord_loc[1]]
@@ -1112,7 +1797,8 @@ def msd_com_inner(coord,r_0,r_0_com,coord_loc=[3,6]):
         msd_list.append(np.average(dist))
     return msd_list
 
-def bonded_beads_distance(simname,coord_loc=[3,6],first_only=False,save=False):
+def bonded_beads_distance(simname,coord_loc=[3,6],first_only=False,save=False,
+hist=False,root_mean_square=False):
     """Find the mean distance between bonded beads during deformation and return mean
     bonded distance at a specific timestep. This is the generic version for calculating
     bonded beads mean distance (backbone polymer versions)
@@ -1157,14 +1843,18 @@ def bonded_beads_distance(simname,coord_loc=[3,6],first_only=False,save=False):
                 curr_diff_array[index_c][2] = curr_diff_array[index_c][2] - boxsize[2]
         curr_diff_array=np.linalg.norm((curr_diff_array),axis=1)
         diff_array=np.append(diff_array,curr_diff_array)
-    plt.hist(curr_diff_array)
-    plt.xticks(fontsize=14)
-    plt.yticks(fontsize=14)
-    plt.xlabel('Bond length',fontsize=20,fontfamily='Serif')
+    if hist:
+        plt.hist(curr_diff_array)
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
+        plt.xlabel('Bond length',fontsize=20,fontfamily='Serif')
     if save:
         plt.tight_layout()
         plt.savefig(simname +'_bond_length.png',dpi=300)
-    return np.mean(diff_array)
+    if root_mean_square:
+        return np.sqrt(np.mean(np.power(diff_array,2)))
+    else:
+        return np.mean(diff_array)
 
 def bonded_beads_distance_whole(simname,coord_loc=[3,6],save=False):
     """Find the mean distance between bonded beads during deformation and return
@@ -1215,7 +1905,7 @@ def bonded_beads_distance_whole(simname,coord_loc=[3,6],save=False):
         bonded_beads_distance_list.append(np.mean(diff_array))
     return bonded_beads_distance_list
 
-def bonded_beads_distance_whole_backbone(simname,coord_loc=[3,6],save=False):
+def bonded_beads_distance_whole_backbone(simname,first_only=False,coord_loc=[3,6],save=False,root_mean_square=False):
     """Find the mean distance between bonded beads during deformation and return
     a list containing the mean bonded distance at each timestep. This is a special
     version for polymers containing sidechain. It only works for 3 bead sidechain 
@@ -1231,7 +1921,10 @@ def bonded_beads_distance_whole_backbone(simname,coord_loc=[3,6],save=False):
     mean_dist (float): Mean distance between bonded beads
     """
     bonded_beads_distance_list=[]
-    df, boxsize_whole =extract.extract_unwrapped(simname,boxsize_whole=True)
+    if first_only:
+        df, bs =extract.extract_unwrapped(simname,first_only=True,boxsize=True)
+    else:
+        df, boxsize_whole =extract.extract_unwrapped(simname,boxsize_whole=True)
     for key in df:
         coord=df[key]
         coord.sort_values(by=['id'],inplace=True)
@@ -1243,7 +1936,10 @@ def bonded_beads_distance_whole_backbone(simname,coord_loc=[3,6],save=False):
             curr_chain_coords= np.delete(curr_chain_coords,-1,0)
             curr_diff_array=curr_chain_coords - one_row_shifted
             curr_diff_array = curr_diff_array[:88,:]
-            boxsize = boxsize_whole[key]
+            if first_only:
+                boxsize = bs
+            else:
+                boxsize = boxsize_whole[key]
             sidehalfx = boxsize[0]/2
             sidehalfy = boxsize[1]/2
             sidehalfz = boxsize[2]/2
@@ -1263,7 +1959,10 @@ def bonded_beads_distance_whole_backbone(simname,coord_loc=[3,6],save=False):
             curr_diff_array=np.linalg.norm((curr_diff_array),axis=1)
             diff_array=np.append(diff_array,curr_diff_array)
         bonded_beads_distance_list.append(np.mean(diff_array))
-    return bonded_beads_distance_list
+    if root_mean_square:
+        return np.sqrt(np.mean(np.power(diff_array,2)))
+    else:
+        return np.mean(diff_array)
 
 def bonded_beads_distance_whole_sidechain(simname,coord_loc=[3,6],save=False):
     """Find the mean distance between bonded beads during deformation and return
@@ -1370,7 +2069,7 @@ def return_youngs_modulus(simname):
     """Find young's modulus (0.03 strain)
     """
     df1,df2=extract.extract_def(simname)
-    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_8_x')
+    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_2_x')
     df1=df1.values
     df2=df2.values
     df3=df3.values
@@ -1384,8 +2083,8 @@ def return_youngs_modulus(simname):
     slope, intercept, r_value, p_value, std_err = stats.linregress(strain[:till],df1[:till,deformation_along+1])
     return slope
 
-def tangent_modulus(simname):
-    """Compute tangent modulus between 0.05 and 0.08 strain
+def tangent_modulus(simname,strain):
+    """Compute tangent modulus between 0.1 to 0.4 strain
     
     Args:
     simname (str): filename of the simulation
@@ -1394,18 +2093,15 @@ def tangent_modulus(simname):
     slope (float): tangent modulus
     """
     df1,df2=extract.extract_def(simname)
-    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_3_x')
     df1=df1.values
     df2=df2.values
-    df3=df3.values
     deformation_along = np.argmax(np.array([np.std(df1[:,1]),
                                     np.std(df1[:,2]),
                                     np.std(df1[:,3])]))
-    strain=df3[:,0]
     #for index, element in enumerate(strain):
     #    print(index,element)
-    begin=30
-    till=61
+    begin=611
+    till=2446
     slope, intercept, r_value, p_value, std_err = stats.linregress(strain[begin:till],df1[begin:till,deformation_along+1])
     return slope
 
@@ -1424,8 +2120,11 @@ def tangent_modulus_with_error(*args):
     tm - tangent modulus
     """
     tm=[]
+    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_3_x')
+    df3=df3.values
+    strain=df3[:,0]
     for simname in args:
-        tm.append(tangent_modulus(simname))
+        tm.append(tangent_modulus(simname,strain))
     tm_mean = np.mean(np.asarray(tm))
     tm_std = np.std(np.asarray(tm))
     tm_se = stats.sem(np.asarray(tm))
@@ -1444,7 +2143,7 @@ def poisson_ratio(simname):
     """Compute poisson's ratio between ____
     """
     df1,df2=extract.extract_def(simname)
-    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_3_x')
+    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_2_x')
     df1=df1.values
     df2=df2.values
     df3=df3.values
@@ -1453,7 +2152,8 @@ def poisson_ratio(simname):
                                     np.std(df1[:,3])]))
     strain=df3[:,0]
     begin=0
-    till=91
+    #till=305
+    till=303
     if (deformation_along + 1) == 1:
         transverse_1=5
         transverse_2=6
@@ -1464,18 +2164,15 @@ def poisson_ratio(simname):
         transverse_1=4
         transverse_2=5
     transverse_1_list=df1[begin:till,transverse_1]
-    print(transverse_1_list)
     transverse_2_list=df1[begin:till,transverse_2]
     transverse_1_list=(transverse_1_list - transverse_1_list[0])/transverse_1_list[0]
     transverse_2_list=(transverse_2_list - transverse_2_list[0])/transverse_2_list[0]
     strain_list=strain[begin:till]
-    print(strain_list)
-    print(transverse_1_list)
     slope, intercept, r_value, p_value, std_err = stats.linregress(strain_list,transverse_1_list)
     poisson_1=-(transverse_1_list/strain_list)
     poisson_2=-(transverse_2_list/strain_list)
     print(-slope)
-    return poisson_1[90], poisson_2[90]
+    return poisson_1[300], poisson_2[300]
 
 def poisson_ratio_with_error(*args):
     pr=[]
@@ -1797,3 +2494,77 @@ def return_mean_abs_energies(*args):
     etotal_temp = np.mean(etotal_temp, axis = 1)
 
     return ebond_temp, ecoul_temp, evdwl_temp, etotal_temp
+
+def abline(slope, intercept):
+    """Plot a line from slope and intercept"""
+    axes = plt.gca()
+    x_vals = np.array(axes.get_xlim())
+    y_vals = intercept + slope * x_vals
+    #plt.plot(x_vals, y_vals, '--',color='C1')
+    return x_vals,y_vals
+
+def intersectionpoint(slope,intercept,slope2,intercept2):
+    A, B =abline(slope2,intercept2)
+    C, D =abline(slope,intercept)
+    M = [A[0],B[0]]
+    N = [A[1],B[1]]
+    O = [C[0],D[0]]
+    P = [C[1],D[1]]
+    line1 = LineString([M, N])
+    line2 = LineString([O, P])
+    int_pt = line1.intersection(line2)
+    point_of_intersection = int_pt.x, int_pt.y
+    return int_pt.x
+
+def intersectionpoint2(xvals,yvals,xvals2,yvals2):
+    line1 = LineString(np.column_stack((xvals, yvals)))
+    line2 = LineString(np.column_stack((xvals2, yvals2)))
+    int_pt = line1.intersection(line2)
+    point_of_intersection = int_pt.x, int_pt.y
+    return int_pt.x,int_pt.y
+
+def drawline(int_pt):
+    y_vals=np.array([0,1,2,3,4])
+    a=[int_pt]
+    x_vals=np.tile(a,len(y_vals))
+    return x_vals, y_vals
+
+def yield_stress(simname,strain):
+    plt.figure(figsize=(8,8))
+    df1,df2=extract.extract_def(simname)
+    df1=df1.values
+    df2=df2.values
+    deformation_along = np.argmax(np.array([np.std(df1[:,1]),
+                                    np.std(df1[:,2]),
+                                    np.std(df1[:,3])]))
+    curr_stress=df1[:,deformation_along+1]
+    plt.figure(figsize=(8,8))
+    plt.plot(strain,curr_stress)
+    begin=0 # 0.00 strain
+    till=196 #0.0322 strain
+    slope, intercept, r_value, p_value, std_err = stats.linregress(strain[begin:till],
+                                                                    curr_stress[begin:till])
+    begin2=1000 #0.163 strain
+    till2=2500 #0.408 strain
+    slope2, intercept2, r_value, p_value, std_err = stats.linregress(strain[begin2:till2],
+                                                                    curr_stress[begin2:till2])
+    int_pt=intersectionpoint(slope,intercept,slope2,intercept2)
+    x_vals, y_vals=drawline(int_pt)
+    intrx,intry=intersectionpoint2(x_vals,y_vals,strain, curr_stress)
+    if intrx == int_pt:
+        plt.close()
+        return intry
+    else:
+        print('error')
+
+def yield_stress_with_error(*args):
+    ys=[]
+    df3,df4=extract.extract_def('CG_256C_128DP_v20_deform_lj_kg_uk_2_x')
+    df3=df3.values
+    strain=df3[:,0]
+    for simname in args:
+        ys.append(yield_stress(simname,strain))
+    ys_mean = np.mean(np.asarray(ys))
+    ys_std = np.std(np.asarray(ys))
+    ys_se = stats.sem(np.asarray(ys))
+    return ys_mean, ys_std, ys_se

@@ -122,9 +122,9 @@ def autcorrelation_lifetime_correlation(simname,cutoff):
 
 def set_strain_props(ax):
     """Set properties for strain (x-axis) for the given axis object"""
-    fontProperties = {'family':'serif','size':20}
+    fontProperties = {'size':22}
     ax.set_xlim(0,1.71)
-    ax.set_xticklabels(ax.get_yticks(),{'family':'serif','size':14})
+    ax.set_xticklabels(ax.get_yticks(),{'size':18})
     ax.set_xlabel('Strain',fontProperties)
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.tick_params(direction='in')
@@ -132,8 +132,8 @@ def set_strain_props(ax):
 
 def set_y_props(ax,label):
     """"Set properties for y-axis with the given name"""
-    fontProperties = {'family':'serif','size':20}
-    ax.set_yticklabels(ax.get_yticks(),{'family':'serif','size':16})
+    fontProperties = {'family':'Arial','size':22}
+    ax.set_yticklabels(ax.get_yticks(),{'family':'Arial','size':16})
     ax.yaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.set_ylabel(label,fontProperties)
     ax.tick_params(direction='in')
@@ -141,8 +141,8 @@ def set_y_props(ax,label):
 
 def set_x_props(ax,label):
     """"Set properties for y-axis with the given name"""
-    fontProperties = {'family':'serif','size':20}
-    ax.set_xticklabels(ax.get_xticks(),{'family':'serif','size':16})
+    fontProperties = {'family':'Arial','size':22}
+    ax.set_xticklabels(ax.get_xticks(),{'family':'Arial','size':16})
     ax.xaxis.set_major_formatter(FormatStrFormatter('%g'))
     ax.set_xlabel(label,fontProperties)
     ax.tick_params(direction='in')
@@ -468,61 +468,70 @@ def return_mean_temperature(*args):
     m_temperature = np.mean(m_temperature,axis=1)
     return m_temperature
 
-def plot_mean_quantities(*args,ylabel,labels,title,
-deformation_strain_end=1.72002,plot_strain_end=1.0,
-save=False):
+def plot_mean_quantities(*args,ylabel,colors,labels,title,
+deformation_strain_end=1.72002,plot_strain_end=1.0,ncol=1,ylim=None,
+loc='best',save=False,legend_font=14,linewidth=1.0):
     """Plot mean quantities """
-    fig = plt.figure(figsize=(8,8),dpi=150)
+    fig = plt.figure(figsize=[5,4],dpi=100)
     ax=fig.add_subplot(1,1,1)
     strain=np.linspace(0,deformation_strain_end,len(args[0]))
     for index, arg in enumerate(args):
-        ax.plot(strain,arg,label=labels[index])
-    ax.legend(fontsize=16)
+        ax.plot(strain,arg,label=labels[index],color=colors[index],linewidth=linewidth)
     ax = set_x_props(ax, 'Strain')
-    ax = set_y_props(ax, ylabel)
-    #ax.set_ylabel(ylabel,fontsize=14)
-    #ax.set_xlabel('Strain',fontsize=14)
+    fontProperties = {'family':'Arial','size':legend_font}
+    fontPropertieslabel = {'family':'Arial','size':22}
+    ax.set_yticklabels(ax.get_yticks(),{'family':'Arial','size':16})
+    ax.set_ylabel(ylabel,fontPropertieslabel)
+    ax.tick_params(direction='in')
     ax.set_xlim(0,plot_strain_end)
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    textstr = '\n'.join((
-        'Perpendicular electric field',
-        'Electric field = 1.2'))
-    #ax.text(0.07, 0.70, textstr, transform=ax.transAxes, fontsize=14,verticalalignment='top', bbox=props)
+    if ylim:
+        ax.set_ylim(top=ylim)
+    leg=ax.legend(prop=fontProperties,frameon=False,ncol=ncol,loc=loc)
+    for legobj in leg.legendHandles:
+        legobj.set_linewidth(2.0)
     if save:
         plt.tight_layout()
         full_path = imagesavepath + title + '.png'
-        plt.savefig(full_path,dpi=300,bbox_inches='tight')
+        plt.savefig(full_path,dpi=300)
+    return ax
 
-def plot_multiple_numpy(*args, labels, deformation_strain_end=1.72002, 
-    plot_strain_end=1.0,save=False):
+def plot_multiple_numpy(*args, labels,colors, loc='best',deformation_strain_end=1.72002, 
+    plot_strain_end=1.0,save=False,linewidth=1,axes_width=1,legend_font=14,
+    ylim=None,ncol=1):
     """Plot graphs for given arguments
     
     Args:
     *args (str): numpy arrays for each separate simulation containing the
     def 1 file information"""
-    fig1=plt.figure(figsize=[8,8],dpi=150)        
+    fig1=plt.figure(figsize=[5,4],dpi=100)        
     ax = fig1.add_subplot(1,1,1)
     strain=np.linspace(0.00016345,deformation_strain_end,len(args[0]))
     till = len(strain)
+    fontProperties = {'family':'Arial','size':legend_font}
     for index,arg in enumerate(args):
-        ax.plot(strain,arg,linewidth=2,label=labels[index])
+        ax.plot(strain,arg,linewidth=linewidth,label=labels[index],color=colors[index])
     ax.set_xlim(0,plot_strain_end)
-    ax.set_ylim(bottom=0)
+    if ylim:
+        ax.set_ylim(0,ylim)
+    else:
+        ax.set_ylim(bottom=0)
     ax=set_x_props(ax,'Strain')
-    ax=set_y_props(ax,'Stress')
-    ax.legend(prop=dict(size=16))
-    props = dict(boxstyle='round', facecolor='wheat', alpha=0.5)
-    textstr = '\n'.join((
-        'Perpendicular electric field',
-        'Electric field = 1.2'))
-    #ax.text(0.05, 0.65, textstr, transform=ax.transAxes, fontsize=14,
-    #verticalalignment='top', bbox=props)
+    ax=set_y_props(ax,'Stress (LJ units)')
+    leg=ax.legend(prop=fontProperties,frameon=False,ncol=ncol,loc=loc)
+    for legobj in leg.legendHandles:
+        legobj.set_linewidth(2.0)
     plt.tight_layout()
+    plt.setp(ax.spines.values(), linewidth=axes_width)
+    ax.xaxis.set_tick_params(width=axes_width)
+    ax.yaxis.set_tick_params(width=axes_width)
+    #ax.spines['right'].set_visible(False)
+    #ax.spines['top'].set_visible(False)
     if save:
         fname = str(labels)
         fname = fname.replace(',', '').replace('\'','').replace(' ','').strip('[]\'')
         full_path = imagesavepath + fname
         plt.savefig(full_path+'.png',dpi=300)
+    return ax
 
 def structure_factor_plotting(k,sk,simname,save,style):
     if style=='matplotlib':
